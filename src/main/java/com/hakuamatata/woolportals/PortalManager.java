@@ -218,9 +218,6 @@ public class PortalManager {
             return false;
         }
 
-        target.setYaw(player.getLocation().getYaw());
-        target.setPitch(player.getLocation().getPitch());
-
         player.teleport(target);
         cooldowns.put(playerId, now);
 

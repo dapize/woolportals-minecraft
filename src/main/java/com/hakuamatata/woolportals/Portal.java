@@ -178,12 +178,17 @@ public class Portal {
         if (signLoc == null) return null;
 
         Location exit = signLoc.clone().add(0.5, -1.5, 0.5);
-        exit.setYaw(oppositeYaw(signFacing));
+        exit.add(
+            signFacing.getModX() * 0.5,
+            signFacing.getModY() * 0.5,
+            signFacing.getModZ() * 0.5
+        );
+        exit.setYaw(yawFromFacing(signFacing));
         exit.setPitch(0);
         return exit;
     }
 
-    private float oppositeYaw(BlockFace facing) {
+    private float yawFromFacing(BlockFace facing) {
         if (facing == null) return 0f;
         switch (facing) {
             case NORTH: return 180f;
