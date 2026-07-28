@@ -118,14 +118,14 @@ public class Portal {
         this.worldA = null;
         this.facingA = null;
         this.cachedLocationA = null;
-        this.disabledA = false;
+        this.ownerA = null;
     }
 
     void clearB() {
         this.worldB = null;
         this.facingB = null;
         this.cachedLocationB = null;
-        this.disabledB = false;
+        this.ownerB = null;
     }
 
     public boolean hasPortalA() {
