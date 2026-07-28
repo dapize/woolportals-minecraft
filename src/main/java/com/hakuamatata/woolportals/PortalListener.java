@@ -65,7 +65,6 @@ public class PortalListener implements Listener {
             case FRAME_DETECTED:
                 player.sendMessage(ChatColor.YELLOW + "Marco de portal detectado. " +
                     ChatColor.GRAY + "Coloca un boton dentro del portal para activarlo.");
-                event.setCancelled(true);
                 break;
 
             case INVALID_USER:
@@ -223,13 +222,17 @@ public class PortalListener implements Listener {
                 Location locB = portal.getSignLocationB();
 
                 if (locA != null && isBlockInFrame(block, locA)) {
-                    portalManager.disablePortal(portal, false);
-                    player.sendMessage(ChatColor.RED + "El marco del portal se ha roto. Portal desactivado (OFF).");
+                    if (!portalManager.isFrameIntact(portal, false)) {
+                        portalManager.disablePortal(portal, false);
+                        player.sendMessage(ChatColor.RED + "Marco del portal dañado. Portal desactivado (OFF).");
+                    }
                     return;
                 }
                 if (locB != null && isBlockInFrame(block, locB)) {
-                    portalManager.disablePortal(portal, true);
-                    player.sendMessage(ChatColor.RED + "El marco del portal se ha roto. Portal desactivado (OFF).");
+                    if (!portalManager.isFrameIntact(portal, true)) {
+                        portalManager.disablePortal(portal, true);
+                        player.sendMessage(ChatColor.RED + "Marco del portal dañado. Portal desactivado (OFF).");
+                    }
                     return;
                 }
             }
@@ -241,7 +244,7 @@ public class PortalListener implements Listener {
         int dx = Math.abs(block.getX() - woolLoc.getBlockX());
         int dy = Math.abs(block.getY() - woolLoc.getBlockY());
         int dz = Math.abs(block.getZ() - woolLoc.getBlockZ());
-        return dx <= 1 && dy <= 3 && dz <= 1;
+        return dx <= 1 && dy <= 4 && dz <= 1;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -260,7 +263,7 @@ public class PortalListener implements Listener {
 
     private void handleButtonPlace(Block block) {
         for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -2; dy <= 0; dy++) {
+            for (int dy = -3; dy <= 3; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     Block neighbor = block.getRelative(dx, dy, dz);
                     if (!(neighbor.getState() instanceof Sign sign)) continue;
@@ -294,15 +297,12 @@ public class PortalListener implements Listener {
 
             if (locA != null && portal.isDisabledA() && isBlockInFrame(block, locA)) {
                 if (hasSignNear(locA) && portalManager.isFrameIntact(portal, false)) {
-                    portal.setDisabledA(false);
-                    Bukkit.getScheduler().runTask(
-                        Bukkit.getPluginManager().getPlugin("WoolPortals"),
-                        () -> findSignAtLocAndSet(locA, true));
-
-                    if (portal.isUsableB()) {
-                        Bukkit.getScheduler().runTask(
-                            Bukkit.getPluginManager().getPlugin("WoolPortals"),
-                            () -> findSignAtLocAndSet(locB, true));
+                    boolean bOk = !portal.hasPortalB()
+                        || portalManager.isFrameIntact(portal, true);
+                    if (bOk) {
+                        portal.setDisabledA(false);
+                        if (portal.hasPortalB() && portal.isDisabledB()) portal.setDisabledB(false);
+                        syncSigns(portal);
                     }
                     return;
                 }
@@ -310,20 +310,27 @@ public class PortalListener implements Listener {
 
             if (locB != null && portal.isDisabledB() && isBlockInFrame(block, locB)) {
                 if (hasSignNear(locB) && portalManager.isFrameIntact(portal, true)) {
-                    portal.setDisabledB(false);
-                    Bukkit.getScheduler().runTask(
-                        Bukkit.getPluginManager().getPlugin("WoolPortals"),
-                        () -> findSignAtLocAndSet(locB, true));
-
-                    if (portal.isUsableA()) {
-                        Bukkit.getScheduler().runTask(
-                            Bukkit.getPluginManager().getPlugin("WoolPortals"),
-                            () -> findSignAtLocAndSet(locA, true));
+                    boolean aOk = !portal.hasPortalA()
+                        || portalManager.isFrameIntact(portal, false);
+                    if (aOk) {
+                        portal.setDisabledB(false);
+                        if (portal.hasPortalA() && portal.isDisabledA()) portal.setDisabledA(false);
+                        syncSigns(portal);
                     }
                     return;
                 }
             }
         }
+    }
+
+    private void syncSigns(Portal portal) {
+        boolean on = portal.isComplete();
+        Bukkit.getScheduler().runTask(
+            Bukkit.getPluginManager().getPlugin("WoolPortals"),
+            () -> {
+                if (portal.getSignLocationA() != null) findSignAtLocAndSet(portal.getSignLocationA(), on);
+                if (portal.getSignLocationB() != null) findSignAtLocAndSet(portal.getSignLocationB(), on);
+            });
     }
 
     private boolean hasSignNear(Location woolLoc) {
