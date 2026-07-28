@@ -1,11 +1,14 @@
 package com.hakuamatata.woolportals;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
+import org.bukkit.block.data.type.WallSign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -15,6 +18,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -38,12 +42,19 @@ public class PortalListener implements Listener {
         String line1 = event.getLine(1) != null ? event.getLine(1).trim() : "";
         String line2 = event.getLine(2) != null ? event.getLine(2).trim() : "";
 
+        Player player = event.getPlayer();
+
+        Portal existing = portalManager.findPortalBySignBlock(sign.getBlock());
+        if (existing != null) {
+            handleEdit(event, existing, sign, player, line0, line1, line2);
+            return;
+        }
+
         if (!line0.startsWith("#")) return;
         if (line1.isEmpty()) return;
 
-        Player player = event.getPlayer();
-
-        PortalManager.CreateResult result = portalManager.validateAndCreatePortal(sign, player.getName(), line0, line1, line2);
+        PortalManager.CreateResult result = portalManager.validateAndCreatePortal(
+            sign, player.getName(), line0, line1, line2);
 
         switch (result.status) {
             case CREATED:
@@ -52,28 +63,125 @@ public class PortalListener implements Listener {
                 break;
 
             case FRAME_DETECTED:
-                player.sendMessage(ChatColor.YELLOW + "¡Marco de portal detectado! " +
-                    ChatColor.GRAY + "Coloca un botón dentro del portal para activarlo.");
+                player.sendMessage(ChatColor.YELLOW + "Marco de portal detectado. " +
+                    ChatColor.GRAY + "Coloca un boton dentro del portal para activarlo.");
+                event.setCancelled(true);
                 break;
 
             case INVALID_USER:
-                player.sendMessage(ChatColor.RED + "La línea 1 debe ser exactamente #" + player.getName());
+                player.sendMessage(ChatColor.RED + "La linea 1 debe ser exactamente #" + player.getName());
+                event.setCancelled(true);
                 break;
 
             case INVALID_NAME:
-                player.sendMessage(ChatColor.RED + "La línea 2 debe tener el nombre del portal.");
+                player.sendMessage(ChatColor.RED + "La linea 2 debe tener el nombre del portal.");
+                event.setCancelled(true);
                 break;
 
             case DUPLICATE:
                 player.sendMessage(ChatColor.RED + "Ya existe un portal con ese nombre y color.");
+                event.setCancelled(true);
                 break;
 
             case NO_WOOL:
                 player.sendMessage(ChatColor.YELLOW + "Estructura no detectada. " +
                     ChatColor.GRAY + "Construye un marco de lana 3x4 (mismo color), " +
-                    "letrero en el centro superior y botón adentro.");
+                    "letrero en el centro superior y boton adentro.");
+                event.setCancelled(true);
                 break;
         }
+    }
+
+    private void handleEdit(SignChangeEvent event, Portal portal, Sign sign, Player player,
+                            String line0, String line1, String line2) {
+        boolean isB = isPortalB(portal, sign);
+
+        if (!line0.startsWith("#") || !line0.equalsIgnoreCase("#" + player.getName())) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.RED + "No puedes cambiar el dueno del portal.");
+            return;
+        }
+
+        if (line1.isEmpty()) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.RED + "El portal debe tener un nombre.");
+            return;
+        }
+
+        boolean nameChanged = !line1.equalsIgnoreCase(portal.getName());
+        boolean privChanged = !line2.equalsIgnoreCase(isB ? (portal.isPrivateB() ? "privado" : "") : (portal.isPrivateA() ? "privado" : ""));
+        boolean isDisabled = isB ? portal.isDisabledB() : portal.isDisabledA();
+
+        if (nameChanged) {
+            PortalManager.CreateStatus status = portalManager.reassignPortal(portal, isB, line1, player.getName());
+            if (status == PortalManager.CreateStatus.DUPLICATE) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "Ya existe un enlace activo con ese nombre y color. Rompe uno de los portales existentes para liberar el cupo.");
+                return;
+            }
+            player.sendMessage(ChatColor.GREEN + "Portal renombrado a '" + line1 + "'.");
+            return;
+        }
+
+        if (privChanged) {
+            if (isB) {
+                portal.setPrivateB(line2.equalsIgnoreCase("privado"));
+            } else {
+                portal.setPrivateA(line2.equalsIgnoreCase("privado"));
+            }
+            player.sendMessage(ChatColor.GREEN + "Privacidad actualizada.");
+        }
+
+        if (isDisabled) {
+            if (isB) {
+                portal.setDisabledB(false);
+            } else {
+                portal.setDisabledA(false);
+            }
+
+            Bukkit.getScheduler().runTask(
+                Bukkit.getPluginManager().getPlugin("WoolPortals"),
+                () -> {
+                    Location locA = portal.getSignLocationA();
+                    Location locB = portal.getSignLocationB();
+                    if (locA != null) updateSignAt(locA, portal.isUsableA() && portal.isUsableB());
+                    if (locB != null) updateSignAt(locB, portal.isUsableA() && portal.isUsableB());
+                });
+
+            player.sendMessage(ChatColor.GREEN + "Portal reactivado.");
+        }
+    }
+
+    private void updateSignAt(Location woolLoc, boolean on) {
+        for (BlockFace face : new BlockFace[]{
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
+            Block candidate = woolLoc.getBlock().getRelative(face);
+            if (candidate.getState() instanceof Sign sign) {
+                String color = on ? ChatColor.GREEN.toString() : ChatColor.DARK_GRAY.toString();
+                String text = on ? "ON" : "OFF";
+                sign.setLine(3, color + text);
+                sign.update(true);
+                return;
+            }
+        }
+    }
+
+    private boolean isPortalB(Portal portal, Sign sign) {
+        Location signWool = getWoolLoc(sign);
+        Location locB = portal.getSignLocationB();
+        return locB != null && signWool != null && locB.equals(signWool);
+    }
+
+    private Location getWoolLoc(Sign sign) {
+        BlockFace facing = getSignFacingSafe(sign);
+        return sign.getBlock().getRelative(facing.getOppositeFace()).getLocation();
+    }
+
+    private BlockFace getSignFacingSafe(Sign sign) {
+        if (sign.getBlock().getBlockData() instanceof WallSign ws) {
+            return ws.getFacing();
+        }
+        return BlockFace.NORTH;
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -83,7 +191,6 @@ public class PortalListener implements Listener {
 
         Block clickedBlock = event.getClickedBlock();
         if (clickedBlock == null) return;
-
         if (!clickedBlock.getType().name().contains("BUTTON")) return;
 
         Portal portal = portalManager.getPortalAtButton(clickedBlock);
@@ -97,31 +204,6 @@ public class PortalListener implements Listener {
             return;
         }
 
-        Location playerLoc = player.getLocation();
-        Location signLoc = null;
-
-        Location signA = portal.getSignLocationA();
-        Location signB = portal.getSignLocationB();
-        Location btnA = portal.getButtonLocationA();
-        Location btnB = portal.getButtonLocationB();
-
-        if (btnA != null && btnA.equals(clickedBlock.getLocation())) {
-            signLoc = signA;
-        } else if (btnB != null && btnB.equals(clickedBlock.getLocation())) {
-            signLoc = signB;
-        }
-
-        if (signLoc != null && playerLoc.getWorld().equals(signLoc.getWorld())) {
-            double dx = Math.abs(playerLoc.getX() - (signLoc.getX() + 0.5));
-            double dy = Math.abs(playerLoc.getY() - (signLoc.getY() - 2.0));
-            double dz = Math.abs(playerLoc.getZ() - (signLoc.getZ() + 0.5));
-
-            if (dx > 2.0 || dy > 3.0 || dz > 2.0) {
-                player.sendMessage(ChatColor.RED + "Debes estar dentro del portal para usarlo.");
-                return;
-            }
-        }
-
         portalManager.teleportPlayer(player, portal, clickedBlock);
     }
 
@@ -132,23 +214,140 @@ public class PortalListener implements Listener {
 
         if (block.getState() instanceof Sign) {
             Portal portal = portalManager.removePortalAtSign(block, player);
-            if (portal != null) {
-                return;
-            }
+            if (portal != null) return;
         }
 
-        Material type = block.getType();
-        if (type.name().endsWith("_WOOL") || type.name().contains("BUTTON")) {
+        if (block.getType().name().endsWith("_WOOL")) {
             for (Portal portal : portalManager.getAllPortals()) {
-                if (isBlockInPortal(block, portal)) {
-                    if (player.getGameMode() == GameMode.CREATIVE &&
-                        player.hasPermission("woolportals.admin")) {
-                        return;
-                    }
-                    event.setCancelled(true);
-                    player.sendMessage(ChatColor.RED + "Este bloque pertenece a un portal. Rompe el letrero para destruirlo.");
+                Location locA = portal.getSignLocationA();
+                Location locB = portal.getSignLocationB();
+
+                if (locA != null && isBlockInFrame(block, locA)) {
+                    portalManager.disablePortal(portal, false);
+                    player.sendMessage(ChatColor.RED + "El marco del portal se ha roto. Portal desactivado (OFF).");
                     return;
                 }
+                if (locB != null && isBlockInFrame(block, locB)) {
+                    portalManager.disablePortal(portal, true);
+                    player.sendMessage(ChatColor.RED + "El marco del portal se ha roto. Portal desactivado (OFF).");
+                    return;
+                }
+            }
+        }
+    }
+
+    private boolean isBlockInFrame(Block block, Location woolLoc) {
+        if (woolLoc == null || !block.getWorld().equals(woolLoc.getWorld())) return false;
+        int dx = Math.abs(block.getX() - woolLoc.getBlockX());
+        int dy = Math.abs(block.getY() - woolLoc.getBlockY());
+        int dz = Math.abs(block.getZ() - woolLoc.getBlockZ());
+        return dx <= 1 && dy <= 3 && dz <= 1;
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Block block = event.getBlock();
+
+        if (block.getType().name().contains("BUTTON")) {
+            handleButtonPlace(block);
+            return;
+        }
+
+        if (block.getType().name().endsWith("_WOOL")) {
+            handleWoolPlace(block);
+        }
+    }
+
+    private void handleButtonPlace(Block block) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -2; dy <= 0; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    Block neighbor = block.getRelative(dx, dy, dz);
+                    if (!(neighbor.getState() instanceof Sign sign)) continue;
+
+                    String[] lines = sign.getLines();
+                    String line0 = lines[0] != null ? lines[0].trim() : "";
+                    String line1 = lines[1] != null ? lines[1].trim() : "";
+                    String line2 = lines[2] != null ? lines[2].trim() : "";
+
+                    if (!line0.startsWith("#")) continue;
+                    if (line1.isEmpty()) continue;
+
+                    String owner = line0.substring(1);
+                    PortalManager.CreateResult result = portalManager.validateAndCreatePortal(
+                        sign, owner, line0, line1, line2);
+
+                    if (result.status == PortalManager.CreateStatus.CREATED ||
+                        result.status == PortalManager.CreateStatus.LINKED ||
+                        result.status == PortalManager.CreateStatus.REPAIRED) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private void handleWoolPlace(Block block) {
+        for (Portal portal : portalManager.getAllPortals()) {
+            Location locA = portal.getSignLocationA();
+            Location locB = portal.getSignLocationB();
+
+            if (locA != null && portal.isDisabledA() && isBlockInFrame(block, locA)) {
+                if (hasSignNear(locA) && portalManager.isFrameIntact(portal, false)) {
+                    portal.setDisabledA(false);
+                    Bukkit.getScheduler().runTask(
+                        Bukkit.getPluginManager().getPlugin("WoolPortals"),
+                        () -> findSignAtLocAndSet(locA, true));
+
+                    if (portal.isUsableB()) {
+                        Bukkit.getScheduler().runTask(
+                            Bukkit.getPluginManager().getPlugin("WoolPortals"),
+                            () -> findSignAtLocAndSet(locB, true));
+                    }
+                    return;
+                }
+            }
+
+            if (locB != null && portal.isDisabledB() && isBlockInFrame(block, locB)) {
+                if (hasSignNear(locB) && portalManager.isFrameIntact(portal, true)) {
+                    portal.setDisabledB(false);
+                    Bukkit.getScheduler().runTask(
+                        Bukkit.getPluginManager().getPlugin("WoolPortals"),
+                        () -> findSignAtLocAndSet(locB, true));
+
+                    if (portal.isUsableA()) {
+                        Bukkit.getScheduler().runTask(
+                            Bukkit.getPluginManager().getPlugin("WoolPortals"),
+                            () -> findSignAtLocAndSet(locA, true));
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    private boolean hasSignNear(Location woolLoc) {
+        if (woolLoc == null || woolLoc.getWorld() == null) return false;
+        for (BlockFace face : new BlockFace[]{
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
+            if (woolLoc.getBlock().getRelative(face).getState() instanceof Sign) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void findSignAtLocAndSet(Location woolLoc, boolean on) {
+        if (woolLoc == null || woolLoc.getWorld() == null) return;
+        for (BlockFace face : new BlockFace[]{
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
+            Block candidate = woolLoc.getBlock().getRelative(face);
+            if (candidate.getState() instanceof Sign sign) {
+                String color = on ? ChatColor.GREEN.toString() : ChatColor.DARK_GRAY.toString();
+                String text = on ? "ON" : "OFF";
+                sign.setLine(3, color + text);
+                sign.update(true);
+                return;
             }
         }
     }
@@ -182,28 +381,13 @@ public class PortalListener implements Listener {
 
     private boolean isBlockInAnyPortal(Block block) {
         for (Portal portal : portalManager.getAllPortals()) {
-            if (isBlockInPortal(block, portal)) {
+            Location signA = portal.getSignLocationA();
+            Location signB = portal.getSignLocationB();
+            if ((signA != null && isBlockInFrame(block, signA)) ||
+                (signB != null && isBlockInFrame(block, signB))) {
                 return true;
             }
         }
         return false;
-    }
-
-    private boolean isBlockInPortal(Block block, Portal portal) {
-        Location signA = portal.getSignLocationA();
-        Location signB = portal.getSignLocationB();
-
-        return isBlockNearPortalSign(block, signA) || isBlockNearPortalSign(block, signB);
-    }
-
-    private boolean isBlockNearPortalSign(Block block, Location signLoc) {
-        if (signLoc == null) return false;
-        if (block.getWorld() != signLoc.getWorld()) return false;
-
-        int dx = Math.abs(block.getX() - signLoc.getBlockX());
-        int dy = Math.abs(block.getY() - signLoc.getBlockY());
-        int dz = Math.abs(block.getZ() - signLoc.getBlockZ());
-
-        return dx <= 2 && dy <= 4 && dz <= 1;
     }
 }

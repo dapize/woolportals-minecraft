@@ -150,8 +150,9 @@ public class WoolPortalsCommand implements CommandExecutor {
             sender.sendMessage(ChatColor.RED + "No tienes permiso para este comando.");
             return;
         }
+        portalManager.savePortals();
         portalManager.loadPortals();
-        sender.sendMessage(ChatColor.GREEN + "Portales recargados. " + portalManager.getPortalCount() + " pares cargados.");
+        sender.sendMessage(ChatColor.GREEN + "Portales guardados y recargados. " + portalManager.getPortalCount() + " pares cargados.");
     }
 
     private void handleInfo(CommandSender sender) {

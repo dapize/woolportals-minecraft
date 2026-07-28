@@ -99,6 +99,7 @@ public class Portal {
     public String getOwnerA() { return ownerA; }
     public long getCreatedAtA() { return createdAtA; }
     public boolean isPrivateA() { return privateA; }
+    public void setPrivateA(boolean p) { this.privateA = p; }
     public BlockFace getFacingA() { return facingA; }
 
     public String getWorldB() { return worldB; }
@@ -108,6 +109,7 @@ public class Portal {
     public String getOwnerB() { return ownerB; }
     public long getCreatedAtB() { return createdAtB; }
     public boolean isPrivateB() { return privateB; }
+    public void setPrivateB(boolean p) { this.privateB = p; }
     public BlockFace getFacingB() { return facingB; }
 
     public boolean hasPortalA() {

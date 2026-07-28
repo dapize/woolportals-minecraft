@@ -29,6 +29,8 @@ public class PortalManager {
         this.portals = new ConcurrentHashMap<>();
         this.cooldowns = new ConcurrentHashMap<>();
         this.dataFile = new File(plugin.getDataFolder(), "portals.yml");
+
+        Bukkit.getScheduler().runTaskTimer(plugin, this::savePortals, 6000L, 6000L);
     }
 
     public enum CreateStatus {
@@ -177,7 +179,14 @@ public class PortalManager {
             return false;
         }
 
-        if (isPortalAButton(portal, clickedButton.getLocation())) {
+        boolean isPortalA = isPortalAButton(portal, clickedButton.getLocation());
+        if (!isFrameIntact(portal, isPortalA)) {
+            disablePortal(portal, isPortalA);
+            player.sendMessage(ChatColor.RED + "El marco del portal está dañado. Repáralo y edita el letrero para reactivarlo.");
+            return false;
+        }
+
+        if (isPortalA) {
             if (portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA())) {
                 player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerA() + " puede usarlo.");
                 return false;
@@ -262,6 +271,13 @@ public class PortalManager {
 
         final Portal portal = found;
         final boolean isA = isPortalA;
+        final boolean hasOther = isA ? portal.hasPortalB() : portal.hasPortalA();
+
+        if (!hasOther) {
+            portals.remove(foundKey);
+            destroyer.sendMessage(ChatColor.GREEN + "Portal '" + portal.getName() + "' eliminado.");
+            return portal;
+        }
 
         if (isA) {
             portal.setDisabledA(true);
@@ -521,5 +537,115 @@ public class PortalManager {
 
     public Portal getPortal(String pairId) {
         return portals.get(pairId);
+    }
+
+    public Portal findPortalBySignBlock(Block signBlock) {
+        if (!(signBlock.getState() instanceof Sign sign)) return null;
+        BlockFace signFacing = getSignFacing(sign);
+        Block woolBlock = signBlock.getRelative(signFacing.getOppositeFace());
+        if (!isWool(woolBlock.getType())) return null;
+
+        for (Portal portal : portals.values()) {
+            Location locA = portal.getSignLocationA();
+            Location locB = portal.getSignLocationB();
+            if (locA != null && locA.equals(woolBlock.getLocation())) return portal;
+            if (locB != null && locB.equals(woolBlock.getLocation())) return portal;
+        }
+        return null;
+    }
+
+    public boolean isFrameIntact(Portal portal, boolean portalB) {
+        Location woolLoc = portalB ? portal.getSignLocationB() : portal.getSignLocationA();
+        if (woolLoc == null || woolLoc.getWorld() == null) return false;
+        if (!isWool(woolLoc.getBlock().getType())) return false;
+
+        Material woolType = woolLoc.getBlock().getType();
+        BlockFace facing = portalB ? portal.getFacingB() : portal.getFacingA();
+        if (facing == null) facing = BlockFace.NORTH;
+
+        return tryDetectFrame(woolLoc.getBlock(), facing, woolType) != null;
+    }
+
+    public void disablePortal(Portal portal, boolean portalB) {
+        if (portalB) {
+            portal.setDisabledB(true);
+        } else {
+            portal.setDisabledA(true);
+        }
+
+        Location locA = portal.getSignLocationA();
+        Location locB = portal.getSignLocationB();
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (locA != null) findAndSetSign(locA, false);
+            if (locB != null) findAndSetSign(locB, false);
+        });
+    }
+
+    public CreateStatus reassignPortal(Portal portal, boolean portalB, String newName, String playerName) {
+        String woolColor = portal.getWoolColor();
+        String oldPairId = portal.getPairId();
+        String newPairId = newName + "_" + woolColor;
+
+        Portal targetPair = portals.get(newPairId);
+
+        if (targetPair != null && targetPair.isComplete()) {
+            return CreateStatus.DUPLICATE;
+        }
+
+        Location orphanLoc = portalB ? portal.getSignLocationA() : portal.getSignLocationB();
+
+        portals.remove(oldPairId);
+
+        boolean isPrivate = portalB ? portal.isPrivateB() : portal.isPrivateA();
+        BlockFace facing = portalB ? portal.getFacingB() : portal.getFacingA();
+        Location myLoc = portalB ? portal.getSignLocationB() : portal.getSignLocationA();
+
+        if (orphanLoc != null) {
+            final Location orphan = orphanLoc.clone();
+            Bukkit.getScheduler().runTask(plugin, () -> findAndSetSign(orphan, false));
+        }
+
+        if (targetPair != null) {
+            if (targetPair.hasPortalA() && targetPair.isDisabledA()) {
+                targetPair.setDisabledA(false);
+            }
+            if (targetPair.hasPortalB() && targetPair.isDisabledB()) {
+                targetPair.setDisabledB(false);
+            }
+
+            if (!targetPair.hasPortalA()) {
+                targetPair.setPortalA(myLoc, playerName, isPrivate, facing);
+            } else if (!targetPair.hasPortalB()) {
+                targetPair.setPortalB(myLoc, playerName, isPrivate, facing);
+            }
+
+            portals.put(newPairId, targetPair);
+
+            if (targetPair.isComplete()) {
+                final Portal tp = targetPair;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    updateOtherSign(tp, true);
+                    updateOtherSignA(tp, true);
+                });
+                return CreateStatus.LINKED;
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Location loc = targetPair.getSignLocationA() != null ? targetPair.getSignLocationA() : targetPair.getSignLocationB();
+                if (loc != null) findAndSetSign(loc, false);
+            });
+            return CreateStatus.CREATED;
+        }
+
+        Portal newPortal = new Portal(newName, woolColor);
+        newPortal.setPortalA(myLoc, playerName, isPrivate, facing);
+        portals.put(newPairId, newPortal);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Location loc = newPortal.getSignLocationA();
+            if (loc != null) findAndSetSign(loc, false);
+        });
+        return CreateStatus.CREATED;
     }
 }
