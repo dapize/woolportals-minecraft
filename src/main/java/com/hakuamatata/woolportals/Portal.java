@@ -3,8 +3,7 @@ package com.hakuamatata.woolportals;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-
-import java.util.UUID;
+import org.bukkit.block.BlockFace;
 
 public class Portal {
 
@@ -16,11 +15,17 @@ public class Portal {
     private int xA, yA, zA;
     private String ownerA;
     private long createdAtA;
+    private boolean privateA;
+    private boolean disabledA;
+    private transient BlockFace facingA;
 
     private String worldB;
     private int xB, yB, zB;
     private String ownerB;
     private long createdAtB;
+    private boolean privateB;
+    private boolean disabledB;
+    private transient BlockFace facingB;
 
     private transient Location cachedLocationA;
     private transient Location cachedLocationB;
@@ -31,22 +36,26 @@ public class Portal {
         this.pairId = name + "_" + woolColor;
     }
 
-    public void setPortalA(Location signLoc, String owner) {
+    public void setPortalA(Location signLoc, String owner, boolean isPrivate, BlockFace signFacing) {
         this.worldA = signLoc.getWorld().getName();
         this.xA = signLoc.getBlockX();
         this.yA = signLoc.getBlockY();
         this.zA = signLoc.getBlockZ();
         this.ownerA = owner;
+        this.privateA = isPrivate;
+        this.facingA = signFacing;
         this.createdAtA = System.currentTimeMillis();
         this.cachedLocationA = signLoc.clone();
     }
 
-    public void setPortalB(Location signLoc, String owner) {
+    public void setPortalB(Location signLoc, String owner, boolean isPrivate, BlockFace signFacing) {
         this.worldB = signLoc.getWorld().getName();
         this.xB = signLoc.getBlockX();
         this.yB = signLoc.getBlockY();
         this.zB = signLoc.getBlockZ();
         this.ownerB = owner;
+        this.privateB = isPrivate;
+        this.facingB = signFacing;
         this.createdAtB = System.currentTimeMillis();
         this.cachedLocationB = signLoc.clone();
     }
@@ -89,6 +98,8 @@ public class Portal {
     public int getZA() { return zA; }
     public String getOwnerA() { return ownerA; }
     public long getCreatedAtA() { return createdAtA; }
+    public boolean isPrivateA() { return privateA; }
+    public BlockFace getFacingA() { return facingA; }
 
     public String getWorldB() { return worldB; }
     public int getXB() { return xB; }
@@ -96,6 +107,8 @@ public class Portal {
     public int getZB() { return zB; }
     public String getOwnerB() { return ownerB; }
     public long getCreatedAtB() { return createdAtB; }
+    public boolean isPrivateB() { return privateB; }
+    public BlockFace getFacingB() { return facingB; }
 
     public boolean hasPortalA() {
         return worldA != null;
@@ -105,8 +118,21 @@ public class Portal {
         return worldB != null;
     }
 
+    public boolean isDisabledA() { return disabledA; }
+    public void setDisabledA(boolean d) { this.disabledA = d; }
+    public boolean isDisabledB() { return disabledB; }
+    public void setDisabledB(boolean d) { this.disabledB = d; }
+
+    public boolean isUsableA() {
+        return worldA != null && !disabledA;
+    }
+
+    public boolean isUsableB() {
+        return worldB != null && !disabledB;
+    }
+
     public boolean isComplete() {
-        return hasPortalA() && hasPortalB();
+        return isUsableA() && isUsableB();
     }
 
     public Location getButtonLocationA() {
@@ -146,16 +172,24 @@ public class Portal {
 
     public Location getExitLocation(int portalNumber) {
         Location signLoc = portalNumber == 0 ? getSignLocationA() : getSignLocationB();
+        BlockFace signFacing = portalNumber == 0 ? facingA : facingB;
         if (signLoc == null) return null;
 
         Location exit = signLoc.clone().add(0.5, -1.5, 0.5);
-        exit.setYaw(determineYaw(signLoc));
+        exit.setYaw(oppositeYaw(signFacing));
         exit.setPitch(0);
         return exit;
     }
 
-    private float determineYaw(Location signLoc) {
-        return 0f;
+    private float oppositeYaw(BlockFace facing) {
+        if (facing == null) return 0f;
+        switch (facing) {
+            case NORTH: return 180f;
+            case SOUTH: return 0f;
+            case EAST:  return 270f;
+            case WEST:  return 90f;
+            default:    return 0f;
+        }
     }
 
     @Override

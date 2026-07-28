@@ -1,5 +1,5 @@
 name: WoolPortals
-version: "0.1.0"
+version: "0.2.1"
 main: com.hakuamatata.woolportals.WoolPortals
 api-version: "1.21"
 description: Wool-based teleport portals for Hakuna matata
@@ -22,7 +22,6 @@ permissions:
 
 commands:
   woolportals:
-    description: WoolPortals admin commands
-    usage: /woolportals <reload|list|info>
+    description: WoolPortals commands
+    usage: /wp <list|info|reload>
     aliases: [wp]
-    permission: woolportals.admin

@@ -32,7 +32,7 @@ public class PortalManager {
     }
 
     public enum CreateStatus {
-        CREATED, LINKED, FRAME_DETECTED, INVALID_USER, INVALID_NAME, DUPLICATE, NO_WOOL
+        CREATED, LINKED, FRAME_DETECTED, INVALID_USER, INVALID_NAME, DUPLICATE, NO_WOOL, REPAIRED
     }
 
     public static class CreateResult {
@@ -44,13 +44,16 @@ public class PortalManager {
         }
     }
 
-    public CreateResult validateAndCreatePortal(Sign sign, String playerName, String line0, String line1) {
+    public CreateResult validateAndCreatePortal(Sign sign, String playerName, String line0, String line1, String line2) {
         if (sign == null) return new CreateResult(CreateStatus.NO_WOOL, null);
 
         String rawLine1 = line0 != null ? line0.trim() : "";
-        String portalName = line1 != null ? line1.trim() : "";
+        String portalName  = line1 != null ? line1.trim() : "";
+        String optionLine  = line2 != null ? line2.trim().toLowerCase() : "";
 
-        if (!rawLine1.equalsIgnoreCase("@" + playerName)) {
+        boolean isPrivate = optionLine.equals("privado");
+
+        if (!rawLine1.equalsIgnoreCase("#" + playerName)) {
             return new CreateResult(CreateStatus.INVALID_USER, null);
         }
         if (portalName.isEmpty()) {
@@ -64,7 +67,7 @@ public class PortalManager {
 
         Material woolType = woolBlock.getType();
 
-        List<Block> frameBlocks = detectPortalFrame(woolBlock, signFacing, woolType);
+        List<Block> frameBlocks = tryDetectFrame(woolBlock, signFacing, woolType);
         if (frameBlocks == null) return new CreateResult(CreateStatus.NO_WOOL, null);
 
         Block buttonBlock = findButtonInside(woolBlock, signFacing);
@@ -79,15 +82,10 @@ public class PortalManager {
 
         if (existing == null) {
             Portal portal = new Portal(portalName, woolColor);
-            portal.setPortalA(woolBlock.getLocation(), playerName);
-            registerPortalBlocks(portal, 0, frameBlocks, buttonBlock);
+            portal.setPortalA(woolBlock.getLocation(), playerName, isPrivate, signFacing);
             portals.put(pairId, portal);
 
-            String msg = ChatColor.GREEN + "¡Portal '" + portalName + "' creado! " +
-                         ChatColor.GRAY + "Ahora construye otro igual para enlazarlo.";
-            woolBlock.getWorld().getNearbyEntities(woolBlock.getLocation(), 10, 10, 10).stream()
-                .filter(e -> e instanceof org.bukkit.entity.Player)
-                .forEach(e -> ((org.bukkit.entity.Player) e).sendMessage(msg));
+            Bukkit.getScheduler().runTask(plugin, () -> setSignStatus(sign.getBlock(), false));
 
             return new CreateResult(CreateStatus.CREATED, portal);
         }
@@ -96,19 +94,72 @@ public class PortalManager {
             return new CreateResult(CreateStatus.DUPLICATE, null);
         }
 
-        if (isPortalTooClose(existing.getSignLocationA(), woolBlock.getLocation())) {
-            return new CreateResult(CreateStatus.DUPLICATE, null);
+        if (!existing.hasPortalB()) {
+            existing.setPortalB(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            portals.put(pairId, existing);
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                setSignStatus(sign.getBlock(), true);
+                updateOtherSign(existing, true);
+            });
+
+            return new CreateResult(CreateStatus.LINKED, existing);
         }
 
-        existing.setPortalB(woolBlock.getLocation(), playerName);
-        registerPortalBlocks(existing, 1, frameBlocks, buttonBlock);
-        portals.put(pairId, existing);
+        if (existing.isDisabledA()) {
+            existing.setDisabledA(false);
+            existing.setPortalA(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            portals.put(pairId, existing);
 
-        String msg = ChatColor.GREEN + "¡Portales '" + portalName + "' enlazados! " +
-                     ChatColor.LIGHT_PURPLE + "¡Ya puedes teletransportarte!";
-        broadcastToPortal(existing, msg);
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                setSignStatus(sign.getBlock(), true);
+                if (existing.isUsableB()) {
+                    updateOtherSignA(existing, true);
+                }
+            });
 
-        return new CreateResult(CreateStatus.LINKED, existing);
+            return new CreateResult(CreateStatus.REPAIRED, existing);
+        }
+
+        if (existing.isDisabledB()) {
+            existing.setDisabledB(false);
+            existing.setPortalB(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            portals.put(pairId, existing);
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                setSignStatus(sign.getBlock(), true);
+                if (existing.isUsableA()) {
+                    updateOtherSign(existing, true);
+                }
+            });
+
+            return new CreateResult(CreateStatus.REPAIRED, existing);
+        }
+
+        return new CreateResult(CreateStatus.DUPLICATE, null);
+    }
+
+    private void setSignStatus(Block signBlock, boolean on) {
+        if (signBlock.getState() instanceof Sign sign) {
+            String color = on ? ChatColor.GREEN.toString() : ChatColor.DARK_GRAY.toString();
+            String text = on ? "ON" : "OFF";
+            sign.setLine(3, color + text);
+            sign.update(true);
+        }
+    }
+
+    private void updateOtherSign(Portal portal, boolean on) {
+        Location otherLoc = portal.getSignLocationA();
+        if (otherLoc != null && otherLoc.getWorld() != null) {
+            findAndSetSign(otherLoc, on);
+        }
+    }
+
+    private void updateOtherSignA(Portal portal, boolean on) {
+        Location otherLoc = portal.getSignLocationB();
+        if (otherLoc != null && otherLoc.getWorld() != null) {
+            findAndSetSign(otherLoc, on);
+        }
     }
 
     public Portal getPortalAtButton(Block buttonBlock) {
@@ -122,8 +173,20 @@ public class PortalManager {
 
     public boolean teleportPlayer(org.bukkit.entity.Player player, Portal portal, Block clickedButton) {
         if (!portal.isComplete()) {
-            player.sendMessage(ChatColor.RED + "Este portal aún no tiene contraparte.");
+            player.sendMessage(ChatColor.RED + "Este portal no está enlazado.");
             return false;
+        }
+
+        if (isPortalAButton(portal, clickedButton.getLocation())) {
+            if (portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA())) {
+                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerA() + " puede usarlo.");
+                return false;
+            }
+        } else {
+            if (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB())) {
+                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerB() + " puede usarlo.");
+                return false;
+            }
         }
 
         UUID playerId = player.getUniqueId();
@@ -197,34 +260,46 @@ public class PortalManager {
             return null;
         }
 
-        portals.remove(foundKey);
+        final Portal portal = found;
+        final boolean isA = isPortalA;
 
-        final String portalName = found.getName();
-
-        if (isPortalA) {
-            Location other = found.getSignLocationB();
-            if (other != null && other.getWorld() != null) {
-                other.getWorld().getNearbyEntities(other, 10, 10, 10).stream()
-                    .filter(e -> e instanceof org.bukkit.entity.Player)
-                    .forEach(e -> ((org.bukkit.entity.Player) e).sendMessage(
-                        ChatColor.RED + "¡El portal '" + portalName + "' ha sido destruido!"));
-            }
+        if (isA) {
+            portal.setDisabledA(true);
         } else {
-            Location other = found.getSignLocationA();
-            if (other != null && other.getWorld() != null) {
-                other.getWorld().getNearbyEntities(other, 10, 10, 10).stream()
-                    .filter(e -> e instanceof org.bukkit.entity.Player)
-                    .forEach(e -> ((org.bukkit.entity.Player) e).sendMessage(
-                        ChatColor.RED + "¡El portal '" + portalName + "' ha sido destruido!"));
-            }
+            portal.setDisabledB(true);
         }
 
-        destroyer.sendMessage(ChatColor.GREEN + "Portal '" + portalName + "' destruido.");
-        return found;
+        final Location locA = portal.getSignLocationA();
+        final Location locB = portal.getSignLocationB();
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (isA) {
+                findAndSetSign(locA, false);
+            } else {
+                findAndSetSign(locB, false);
+            }
+            if (locA != null && locB != null) {
+                if (isA && portal.isUsableB()) {
+                    findAndSetSign(locB, false);
+                } else if (!isA && portal.isUsableA()) {
+                    findAndSetSign(locA, false);
+                }
+            }
+        });
+
+        destroyer.sendMessage(ChatColor.GREEN + "Portal '" + portal.getName() + "' destruido.");
+        return portal;
     }
 
-    private List<Block> detectPortalFrame(Block signBlock, BlockFace facing, Material woolType) {
-        return tryDetectFrame(signBlock, facing, woolType);
+    private void findAndSetSign(Location woolLoc, boolean on) {
+        if (woolLoc == null || woolLoc.getWorld() == null) return;
+        for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
+            Block candidate = woolLoc.getBlock().getRelative(face);
+            if (candidate.getState() instanceof Sign) {
+                setSignStatus(candidate, on);
+                return;
+            }
+        }
     }
 
     private List<Block> tryDetectFrame(Block signBlock, BlockFace facing, Material woolType) {
@@ -334,28 +409,10 @@ public class PortalManager {
         return existing.distance(newLoc) < 5;
     }
 
-    private void registerPortalBlocks(Portal portal, int portalNum, List<Block> frame, Block button) {
-    }
-
-    private void broadcastToPortal(Portal portal, String msg) {
-        Location locA = portal.getSignLocationA();
-        Location locB = portal.getSignLocationB();
-
-        if (locA != null && locA.getWorld() != null) {
-            locA.getWorld().getNearbyEntities(locA, 15, 15, 15).stream()
-                .filter(e -> e instanceof org.bukkit.entity.Player)
-                .forEach(e -> ((org.bukkit.entity.Player) e).sendMessage(msg));
-        }
-
-        if (locB != null && locB.getWorld() != null) {
-            locB.getWorld().getNearbyEntities(locB, 15, 15, 15).stream()
-                .filter(e -> e instanceof org.bukkit.entity.Player)
-                .forEach(e -> ((org.bukkit.entity.Player) e).sendMessage(msg));
-        }
-    }
-
     @SuppressWarnings("unchecked")
     public void loadPortals() {
+        portals.clear();
+
         if (!dataFile.exists()) return;
 
         FileConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
@@ -375,7 +432,12 @@ public class PortalManager {
                     int x = (Integer) a.get("x");
                     int y = (Integer) a.get("y");
                     int z = (Integer) a.get("z");
-                    portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"));
+                    boolean priv = a.get("private") instanceof Boolean b && b;
+                    boolean dis = a.get("disabled") instanceof Boolean b && b;
+                    String facingStr = (String) a.get("facing");
+                    portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"), priv,
+                        facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
+                    if (dis) portal.setDisabledA(true);
                 }
             }
 
@@ -386,7 +448,12 @@ public class PortalManager {
                     int x = (Integer) b.get("x");
                     int y = (Integer) b.get("y");
                     int z = (Integer) b.get("z");
-                    portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"));
+                    boolean priv = b.get("private") instanceof Boolean bool && bool;
+                    boolean dis = b.get("disabled") instanceof Boolean bool && bool;
+                    String facingStr = (String) b.get("facing");
+                    portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"), priv,
+                        facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
+                    if (dis) portal.setDisabledB(true);
                 }
             }
 
@@ -411,6 +478,9 @@ public class PortalManager {
             a.put("y", portal.getYA());
             a.put("z", portal.getZA());
             a.put("owner", portal.getOwnerA());
+            a.put("private", portal.isPrivateA());
+            a.put("disabled", portal.isDisabledA());
+            if (portal.getFacingA() != null) a.put("facing", portal.getFacingA().name());
             map.put("portalA", a);
 
             if (portal.hasPortalB()) {
@@ -420,6 +490,9 @@ public class PortalManager {
                 b.put("y", portal.getYB());
                 b.put("z", portal.getZB());
                 b.put("owner", portal.getOwnerB());
+                b.put("private", portal.isPrivateB());
+                b.put("disabled", portal.isDisabledB());
+                if (portal.getFacingB() != null) b.put("facing", portal.getFacingB().name());
                 map.put("portalB", b);
             }
 

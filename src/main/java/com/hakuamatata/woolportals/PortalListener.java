@@ -22,11 +22,9 @@ import org.bukkit.inventory.EquipmentSlot;
 
 public class PortalListener implements Listener {
 
-    private final WoolPortals plugin;
     private final PortalManager portalManager;
 
     public PortalListener(WoolPortals plugin, PortalManager portalManager) {
-        this.plugin = plugin;
         this.portalManager = portalManager;
     }
 
@@ -38,44 +36,43 @@ public class PortalListener implements Listener {
 
         String line0 = event.getLine(0) != null ? event.getLine(0).trim() : "";
         String line1 = event.getLine(1) != null ? event.getLine(1).trim() : "";
+        String line2 = event.getLine(2) != null ? event.getLine(2).trim() : "";
 
-        if (!line0.startsWith("@")) return;
+        if (!line0.startsWith("#")) return;
         if (line1.isEmpty()) return;
 
         Player player = event.getPlayer();
 
-        PortalManager.CreateResult result = portalManager.validateAndCreatePortal(sign, player.getName(), line0, line1);
+        PortalManager.CreateResult result = portalManager.validateAndCreatePortal(sign, player.getName(), line0, line1, line2);
 
         switch (result.status) {
             case CREATED:
-                // message is handled inside validateAndCreatePortal
-                return;
-
+            case REPAIRED:
             case LINKED:
-                return;
+                break;
 
             case FRAME_DETECTED:
                 player.sendMessage(ChatColor.YELLOW + "¡Marco de portal detectado! " +
                     ChatColor.GRAY + "Coloca un botón dentro del portal para activarlo.");
-                return;
+                break;
 
             case INVALID_USER:
-                player.sendMessage(ChatColor.RED + "La línea 1 debe ser exactamente @" + player.getName());
-                return;
+                player.sendMessage(ChatColor.RED + "La línea 1 debe ser exactamente #" + player.getName());
+                break;
 
             case INVALID_NAME:
                 player.sendMessage(ChatColor.RED + "La línea 2 debe tener el nombre del portal.");
-                return;
+                break;
 
             case DUPLICATE:
                 player.sendMessage(ChatColor.RED + "Ya existe un portal con ese nombre y color.");
-                return;
+                break;
 
             case NO_WOOL:
                 player.sendMessage(ChatColor.YELLOW + "Estructura no detectada. " +
                     ChatColor.GRAY + "Construye un marco de lana 3x4 (mismo color), " +
                     "letrero en el centro superior y botón adentro.");
-                return;
+                break;
         }
     }
 
