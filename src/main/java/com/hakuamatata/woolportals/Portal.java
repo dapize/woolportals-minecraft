@@ -154,26 +154,27 @@ public class Portal {
     }
 
     public Location getButtonLocationA() {
-        return getButtonLocation(getSignLocationA());
+        return getButtonLocation(getSignLocationA(), facingA);
     }
 
     public Location getButtonLocationB() {
-        return getButtonLocation(getSignLocationB());
+        return getButtonLocation(getSignLocationB(), facingB);
     }
 
-    private Location getButtonLocation(Location signLoc) {
-        if (signLoc == null) return null;
+    private Location getButtonLocation(Location signLoc, BlockFace facing) {
+        if (signLoc == null || facing == null) return null;
+        int wx = signLoc.getBlockX();
+        int wy = signLoc.getBlockY();
+        int wz = signLoc.getBlockZ();
+        boolean northSouth = facing == BlockFace.NORTH || facing == BlockFace.SOUTH;
 
-        for (int dx : new int[]{-1, 0, 1}) {
-            for (int dz : new int[]{-1, 0, 1}) {
-                for (int dy : new int[]{-1, -2}) {
-                    Location candidate = new Location(signLoc.getWorld(),
-                        signLoc.getBlockX() + dx,
-                        signLoc.getBlockY() + dy,
-                        signLoc.getBlockZ() + dz);
-                    if (candidate.getBlock().getType().name().contains("BUTTON")) {
-                        return candidate;
-                    }
+        for (int dy : new int[]{-1, -2}) {
+            for (int lateral : new int[]{-1, 0, 1}) {
+                int x = wx + (northSouth ? lateral : 0);
+                int z = wz + (northSouth ? 0 : lateral);
+                Location candidate = new Location(signLoc.getWorld(), x, wy + dy, z);
+                if (candidate.getBlock().getType().name().contains("BUTTON")) {
+                    return candidate;
                 }
             }
         }

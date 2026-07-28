@@ -186,16 +186,11 @@ public class PortalManager {
             return false;
         }
 
-        if (isPortalA) {
-            if (portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA())) {
-                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerA() + " puede usarlo.");
-                return false;
-            }
-        } else {
-            if (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB())) {
-                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerB() + " puede usarlo.");
-                return false;
-            }
+        if ((portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA()))
+                || (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB()))) {
+            String owner = portal.isPrivateA() ? portal.getOwnerA() : portal.getOwnerB();
+            player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + owner + " puede usarlo.");
+            return false;
         }
 
         UUID playerId = player.getUniqueId();
