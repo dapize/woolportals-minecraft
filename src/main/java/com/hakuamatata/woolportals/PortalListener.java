@@ -107,6 +107,13 @@ public class PortalListener implements Listener {
         boolean privChanged = !line2.equalsIgnoreCase(isB ? (portal.isPrivateB() ? "privado" : "") : (portal.isPrivateA() ? "privado" : ""));
         boolean isDisabled = isB ? portal.isDisabledB() : portal.isDisabledA();
 
+        BlockFace currentFacing = getSignFacingSafe(sign);
+        if (isB) {
+            if (portal.getFacingB() != currentFacing) portal.setFacingB(currentFacing);
+        } else {
+            if (portal.getFacingA() != currentFacing) portal.setFacingA(currentFacing);
+        }
+
         if (nameChanged) {
             PortalManager.CreateStatus status = portalManager.reassignPortal(portal, isB, line1, player.getName());
             if (status == PortalManager.CreateStatus.DUPLICATE) {
@@ -195,6 +202,13 @@ public class PortalListener implements Listener {
         Player player = event.getPlayer();
         if (!player.hasPermission("woolportals.use")) {
             player.sendMessage(ChatColor.RED + "No tienes permiso para usar portales.");
+            return;
+        }
+
+        Location btnA = portal.getButtonLocationA();
+        boolean isSideA = btnA != null && btnA.equals(clickedBlock.getLocation());
+        if (!portalManager.isPlayerInsidePortal(player, portal, !isSideA)) {
+            player.sendMessage(ChatColor.RED + "Debes estar dentro del portal para usarlo.");
             return;
         }
 

@@ -111,6 +111,22 @@ public class Portal {
     public boolean isPrivateB() { return privateB; }
     public void setPrivateB(boolean p) { this.privateB = p; }
     public BlockFace getFacingB() { return facingB; }
+    void setFacingA(BlockFace f) { this.facingA = f; }
+    void setFacingB(BlockFace f) { this.facingB = f; }
+
+    void clearA() {
+        this.worldA = null;
+        this.facingA = null;
+        this.cachedLocationA = null;
+        this.disabledA = false;
+    }
+
+    void clearB() {
+        this.worldB = null;
+        this.facingB = null;
+        this.cachedLocationB = null;
+        this.disabledB = false;
+    }
 
     public boolean hasPortalA() {
         return worldA != null;
@@ -178,11 +194,6 @@ public class Portal {
         if (signLoc == null) return null;
 
         Location exit = signLoc.clone().add(0.5, -1.5, 0.5);
-        exit.add(
-            signFacing.getModX() * 0.5,
-            signFacing.getModY() * 0.5,
-            signFacing.getModZ() * 0.5
-        );
         exit.setYaw(yawFromFacing(signFacing));
         exit.setPitch(0);
         return exit;

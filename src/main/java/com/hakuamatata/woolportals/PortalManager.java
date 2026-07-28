@@ -276,14 +276,22 @@ public class PortalManager {
             return portal;
         }
 
-        if (isA) {
-            portal.setDisabledA(true);
-        } else {
-            portal.setDisabledB(true);
-        }
-
         final Location locA = portal.getSignLocationA();
         final Location locB = portal.getSignLocationB();
+
+        if (isA) {
+            portal.setDisabledA(true);
+            portal.clearA();
+        } else {
+            portal.setDisabledB(true);
+            portal.clearB();
+        }
+
+        if (!portal.hasPortalA() && !portal.hasPortalB()) {
+            portals.remove(foundKey);
+            destroyer.sendMessage(ChatColor.GREEN + "Portal '" + portal.getName() + "' eliminado completamente.");
+            return portal;
+        }
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (isA) {
@@ -577,6 +585,39 @@ public class PortalManager {
             if (locA != null) findAndSetSign(locA, false);
             if (locB != null) findAndSetSign(locB, false);
         });
+    }
+
+    public boolean isPlayerInsidePortal(org.bukkit.entity.Player player, Portal portal, boolean sideB) {
+        Location woolLoc = sideB ? portal.getSignLocationB() : portal.getSignLocationA();
+        BlockFace facing = sideB ? portal.getFacingB() : portal.getFacingA();
+        if (woolLoc == null || facing == null) return false;
+        if (!player.getWorld().equals(woolLoc.getWorld())) return false;
+
+        Location pl = player.getLocation();
+        double cx = woolLoc.getX() + 0.5;
+        double cz = woolLoc.getZ() + 0.5;
+        double wy = woolLoc.getY();
+
+        double lateralDist, forwardDist;
+
+        switch (facing) {
+            case NORTH: case SOUTH:
+                forwardDist = Math.abs(pl.getZ() - cz);
+                lateralDist  = Math.abs(pl.getX() - cx);
+                break;
+            case EAST: case WEST:
+                forwardDist = Math.abs(pl.getX() - cx);
+                lateralDist  = Math.abs(pl.getZ() - cz);
+                break;
+            default:
+                return false;
+        }
+
+        if (forwardDist > 0.9) return false;
+        if (lateralDist > 0.75) return false;
+
+        double feetY = pl.getY();
+        return feetY >= wy - 4.0 && feetY <= wy;
     }
 
     public CreateStatus reassignPortal(Portal portal, boolean portalB, String newName, String playerName) {
