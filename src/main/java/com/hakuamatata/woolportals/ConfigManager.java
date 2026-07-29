@@ -13,6 +13,7 @@ public class ConfigManager {
 
     private int cooldownSeconds;
     private int autoSaveIntervalTicks;
+    private int maxPortalsPerPlayer;
     private Sound teleportSound;
     private boolean soundEnabled;
     private Particle teleportParticle;
@@ -28,7 +29,8 @@ public class ConfigManager {
         FileConfiguration config = plugin.getConfig();
 
         cooldownSeconds = Math.max(0, config.getInt("cooldown-seconds", 3));
-        autoSaveIntervalTicks = Math.max(200, config.getInt("auto-save-interval-ticks", 6000));
+        autoSaveIntervalTicks = Math.max(200, config.getInt("auto-save-interval-ticks", 12000));
+        maxPortalsPerPlayer = Math.max(0, config.getInt("max-portals-per-player", 10));
 
         String soundName = config.getString("teleport-sound", "ENTITY_ENDERMAN_TELEPORT");
         soundEnabled = !soundName.equalsIgnoreCase("none");
@@ -59,6 +61,10 @@ public class ConfigManager {
 
     public int getAutoSaveIntervalTicks() {
         return autoSaveIntervalTicks;
+    }
+
+    public int getMaxPortalsPerPlayer() {
+        return maxPortalsPerPlayer;
     }
 
     public Sound getTeleportSound() {

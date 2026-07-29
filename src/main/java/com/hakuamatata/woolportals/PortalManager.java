@@ -36,7 +36,7 @@ public class PortalManager {
     }
 
     public enum CreateStatus {
-        CREATED, LINKED, FRAME_DETECTED, INVALID_USER, INVALID_NAME, DUPLICATE, NO_WOOL, REPAIRED
+        CREATED, LINKED, FRAME_DETECTED, INVALID_USER, INVALID_NAME, DUPLICATE, NO_WOOL, REPAIRED, COUNT_EXCEEDED
     }
 
     public static class CreateResult {
@@ -82,6 +82,11 @@ public class PortalManager {
         Portal existing = portals.get(pairId);
 
         if (existing == null) {
+            int maxPortals = config.getMaxPortalsPerPlayer();
+            if (maxPortals > 0 && countPortalsOwnedBy(playerName) >= maxPortals) {
+                return new CreateResult(CreateStatus.COUNT_EXCEEDED, null);
+            }
+
             Portal portal = new Portal(portalName, woolColor);
             portal.setPortalA(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, portal);
@@ -255,6 +260,10 @@ public class PortalManager {
         if (found == null) return null;
 
         String owner = isPortalA ? found.getOwnerA() : found.getOwnerB();
+        if (!destroyer.hasPermission("woolportals.destroy")) {
+            destroyer.sendMessage(ChatColor.RED + "No tienes permiso para destruir portales.");
+            return null;
+        }
         if (!destroyer.getName().equals(owner) && !destroyer.hasPermission("woolportals.admin")) {
             destroyer.sendMessage(ChatColor.RED + "Solo " + owner + " puede destruir este portal.");
             return null;
@@ -416,6 +425,17 @@ public class PortalManager {
     private boolean isPortalAButton(Portal portal, Location buttonLoc) {
         Location btnA = portal.getButtonLocationA();
         return btnA != null && btnA.equals(buttonLoc);
+    }
+
+    private int countPortalsOwnedBy(String playerName) {
+        int count = 0;
+        for (Portal portal : portals.values()) {
+            if (playerName.equalsIgnoreCase(portal.getOwnerA())
+                    || playerName.equalsIgnoreCase(portal.getOwnerB())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private boolean isPortalTooClose(Location existing, Location newLoc) {

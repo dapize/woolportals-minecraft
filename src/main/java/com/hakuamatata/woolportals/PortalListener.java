@@ -49,6 +49,12 @@ public class PortalListener implements Listener {
         if (!line0.startsWith("#")) return;
         if (line1.isEmpty()) return;
 
+        if (!player.hasPermission("woolportals.create")) {
+            player.sendMessage(ChatColor.RED + "No tienes permiso para crear portales.");
+            event.setCancelled(true);
+            return;
+        }
+
         PortalManager.CreateResult result = portalManager.validateAndCreatePortal(
             sign, player.getName(), line0, line1, line2);
 
@@ -75,6 +81,11 @@ public class PortalListener implements Listener {
 
             case DUPLICATE:
                 player.sendMessage(ChatColor.RED + "Ya existe un portal con ese nombre y color.");
+                event.setCancelled(true);
+                break;
+
+            case COUNT_EXCEEDED:
+                player.sendMessage(ChatColor.RED + "Has alcanzado el limite maximo de portales.");
                 event.setCancelled(true);
                 break;
 
@@ -276,7 +287,7 @@ public class PortalListener implements Listener {
         Block block = event.getBlock();
 
         if (block.getType().name().contains("BUTTON")) {
-            handleButtonPlace(block);
+            handleButtonPlace(block, event.getPlayer());
             return;
         }
 
@@ -285,7 +296,9 @@ public class PortalListener implements Listener {
         }
     }
 
-    private void handleButtonPlace(Block block) {
+    private void handleButtonPlace(Block block, Player player) {
+        if (!player.hasPermission("woolportals.create")) return;
+
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -3; dy <= 3; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {

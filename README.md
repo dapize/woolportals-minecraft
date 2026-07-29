@@ -58,14 +58,31 @@ teleport-particle: PORTAL
 | `teleport-sound` | `ENTITY_ENDERMAN_TELEPORT` | Sonido al teletransportarse. `none` desactiva |
 | `teleport-particle` | `PORTAL` | Partículas al teletransportarse. `none` desactiva |
 
+| `max-portals-per-player` | `10` | Máximo de pares de portales por jugador. `0` = sin límite |
+
 ## Permisos
 
 | Permiso | Descripción | Default |
 |---------|-------------|:---:|
 | `woolportals.use` | Usar portales | Todos |
 | `woolportals.create` | Crear portales | Todos |
-| `woolportals.destroy` | Destruir tus portales | Dueño |
+| `woolportals.destroy` | Destruir portales | Todos |
 | `woolportals.admin` | Administrar todos los portales | OP |
+
+### Ejemplos de uso de permisos
+
+Con LuckPerms (`/lp`):
+
+```
+# Evitar que un jugador cree mas portales
+/lp user Jugador permission set woolportals.create false
+
+# Evitar que un jugador destruya portales (ni los suyos)
+/lp user Jugador permission set woolportals.destroy false
+
+# Evitar que un grupo herede el permiso de crear
+/lp group default permission set woolportals.create false
+```
 
 ## Comandos
 
