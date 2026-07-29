@@ -2,6 +2,8 @@
 
 Plugin de portales de lana para Minecraft Paper/Purpur. Creado para el servidor **Hakuna matata**.
 
+El control de acceso a los portales se maneja mediante claims de GriefPrevention (u otro plugin de protección de terrenos).
+
 ## Cómo funciona
 
 1. Construye un marco de **lana 3x4** (mismo color, 10 bloques)
@@ -10,7 +12,7 @@ Plugin de portales de lana para Minecraft Paper/Purpur. Creado para el servidor 
 4. Escribe en el letrero:
    - Línea 1: `#tuusuario`
    - Línea 2: nombre del portal (ej: `casa`)
-   - Línea 3: `privado` (opcional, solo el dueño puede usarlo)
+   - Línea 3: (vacío, sin uso actualmente)
    - Línea 4: el plugin escribe automáticamente el estado (no tocar)
 5. Construye otro portal igual en otra ubicación con el **mismo nombre y color**
 6. Párate dentro del portal y presiona el botón para teletransportarte

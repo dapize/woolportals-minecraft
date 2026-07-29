@@ -104,9 +104,6 @@ public class PortalListener implements Listener {
         }
 
         boolean nameChanged = !line1.equalsIgnoreCase(portal.getName());
-        boolean currentlyPrivate = isB ? portal.isPrivateB() : portal.isPrivateA();
-        boolean lineWantsPrivate = line2.equalsIgnoreCase("privado") || line2.equalsIgnoreCase("private");
-        boolean privChanged = currentlyPrivate != lineWantsPrivate;
         boolean isDisabled = isB ? portal.isDisabledB() : portal.isDisabledA();
 
         BlockFace currentFacing = getSignFacingSafe(sign);
@@ -114,15 +111,6 @@ public class PortalListener implements Listener {
             if (portal.getFacingB() != currentFacing) portal.setFacingB(currentFacing);
         } else {
             if (portal.getFacingA() != currentFacing) portal.setFacingA(currentFacing);
-        }
-
-        if (privChanged) {
-            if (isB) {
-                portal.setPrivateB(lineWantsPrivate);
-            } else {
-                portal.setPrivateA(lineWantsPrivate);
-            }
-            player.sendMessage(ChatColor.GREEN + "Privacidad actualizada.");
         }
 
         if (nameChanged) {

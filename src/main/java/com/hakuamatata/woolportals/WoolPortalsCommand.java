@@ -86,24 +86,15 @@ public class WoolPortalsCommand implements CommandExecutor {
             }
 
             String colorName = formatColor(portal.getWoolColor());
-            String priv = "";
-            boolean isOwn = playerName != null && (playerName.equalsIgnoreCase(portal.getOwnerA()) || playerName.equalsIgnoreCase(portal.getOwnerB()));
-            if (isOwn) {
-                if (portal.getOwnerA() != null && portal.getOwnerA().equalsIgnoreCase(playerName) && portal.isPrivateA()) priv = ChatColor.GRAY + " [privado]";
-                if (portal.getOwnerB() != null && portal.getOwnerB().equalsIgnoreCase(playerName) && portal.isPrivateB()) priv = ChatColor.GRAY + " [privado]";
-            }
 
             if (showAll) {
                 String owners = ChatColor.GRAY + "#" + portal.getOwnerA();
                 if (portal.hasPortalB()) {
                     owners += ChatColor.GRAY + " / #" + portal.getOwnerB();
                 }
-                if ((portal.isPrivateA() && portal.hasPortalA()) || (portal.isPrivateB() && portal.hasPortalB())) {
-                    priv = ChatColor.GRAY + " [privado]";
-                }
                 sender.sendMessage(ChatColor.AQUA + portal.getName() + " " +
                     ChatColor.WHITE + "(" + colorName + ") " +
-                    statusSymbol + " " + owners + priv);
+                    statusSymbol + " " + owners);
             } else {
                 Location ownLoc = getMyLocation(portal, playerName);
                 Location otherLoc = getOtherLocation(portal, playerName);
@@ -119,7 +110,7 @@ public class WoolPortalsCommand implements CommandExecutor {
 
                 sender.sendMessage(ChatColor.AQUA + portal.getName() + " " +
                     ChatColor.WHITE + "(" + colorName + ") " +
-                    statusSymbol + " " + coords + link + priv);
+                    statusSymbol + " " + coords + link);
             }
         }
 
@@ -167,7 +158,7 @@ public class WoolPortalsCommand implements CommandExecutor {
         sender.sendMessage(ChatColor.WHITE + "4. En el letrero escribe:");
         sender.sendMessage(ChatColor.YELLOW + "   Linea 1: #" + (sender instanceof Player ? ((Player) sender).getName() : "tunombre"));
         sender.sendMessage(ChatColor.YELLOW + "   Linea 2: nombre-del-portal");
-        sender.sendMessage(ChatColor.YELLOW + "   Linea 3: privado/private (opcional)");
+        sender.sendMessage(ChatColor.YELLOW + "   Linea 3: (vacio)");
         sender.sendMessage(ChatColor.WHITE + "5. Construye otro portal igual en otro lado");
         sender.sendMessage(ChatColor.WHITE + "   con el mismo nombre y color de lana.");
         sender.sendMessage(ChatColor.GRAY + "Portales del mismo color + nombre se enlazan automaticamente.");

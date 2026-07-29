@@ -51,9 +51,6 @@ public class PortalManager {
 
         String rawLine1 = line0 != null ? line0.trim() : "";
         String portalName  = line1 != null ? line1.trim() : "";
-        String optionLine  = line2 != null ? line2.trim().toLowerCase() : "";
-
-        boolean isPrivate = optionLine.equals("privado") || optionLine.equals("private");
 
         if (!rawLine1.equalsIgnoreCase("#" + playerName)) {
             return new CreateResult(CreateStatus.INVALID_USER, null);
@@ -84,7 +81,7 @@ public class PortalManager {
 
         if (existing == null) {
             Portal portal = new Portal(portalName, woolColor);
-            portal.setPortalA(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            portal.setPortalA(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, portal);
 
             Bukkit.getScheduler().runTask(plugin, () -> setSignStatus(sign.getBlock(), false));
@@ -97,7 +94,7 @@ public class PortalManager {
         }
 
         if (!existing.hasPortalB()) {
-            existing.setPortalB(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            existing.setPortalB(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -110,7 +107,7 @@ public class PortalManager {
 
         if (existing.isDisabledA()) {
             existing.setDisabledA(false);
-            existing.setPortalA(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            existing.setPortalA(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -125,7 +122,7 @@ public class PortalManager {
 
         if (existing.isDisabledB()) {
             existing.setDisabledB(false);
-            existing.setPortalB(woolBlock.getLocation(), playerName, isPrivate, signFacing);
+            existing.setPortalB(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -184,18 +181,6 @@ public class PortalManager {
             disablePortal(portal, isPortalA);
             player.sendMessage(ChatColor.RED + "El marco del portal está dañado. Repáralo y edita el letrero para reactivarlo.");
             return false;
-        }
-
-        if (isPortalA) {
-            if (portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA())) {
-                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerA() + " puede usarlo.");
-                return false;
-            }
-        } else {
-            if (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB())) {
-                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerB() + " puede usarlo.");
-                return false;
-            }
         }
 
         UUID playerId = player.getUniqueId();
@@ -453,10 +438,9 @@ public class PortalManager {
                     int x = (Integer) a.get("x");
                     int y = (Integer) a.get("y");
                     int z = (Integer) a.get("z");
-                    boolean priv = a.get("private") instanceof Boolean b && b;
                     boolean dis = a.get("disabled") instanceof Boolean b && b;
                     String facingStr = (String) a.get("facing");
-                    portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"), priv,
+                    portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"),
                         facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
                     if (dis) portal.setDisabledA(true);
                 }
@@ -469,10 +453,9 @@ public class PortalManager {
                     int x = (Integer) b.get("x");
                     int y = (Integer) b.get("y");
                     int z = (Integer) b.get("z");
-                    boolean priv = b.get("private") instanceof Boolean bool && bool;
                     boolean dis = b.get("disabled") instanceof Boolean bool && bool;
                     String facingStr = (String) b.get("facing");
-                    portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"), priv,
+                    portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"),
                         facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
                     if (dis) portal.setDisabledB(true);
                 }
@@ -499,7 +482,6 @@ public class PortalManager {
             a.put("y", portal.getYA());
             a.put("z", portal.getZA());
             a.put("owner", portal.getOwnerA());
-            a.put("private", portal.isPrivateA());
             a.put("disabled", portal.isDisabledA());
             if (portal.getFacingA() != null) a.put("facing", portal.getFacingA().name());
             map.put("portalA", a);
@@ -511,7 +493,6 @@ public class PortalManager {
                 b.put("y", portal.getYB());
                 b.put("z", portal.getZB());
                 b.put("owner", portal.getOwnerB());
-                b.put("private", portal.isPrivateB());
                 b.put("disabled", portal.isDisabledB());
                 if (portal.getFacingB() != null) b.put("facing", portal.getFacingB().name());
                 map.put("portalB", b);
@@ -635,7 +616,6 @@ public class PortalManager {
 
         portals.remove(oldPairId);
 
-        boolean isPrivate = portalB ? portal.isPrivateB() : portal.isPrivateA();
         BlockFace facing = portalB ? portal.getFacingB() : portal.getFacingA();
         Location myLoc = portalB ? portal.getSignLocationB() : portal.getSignLocationA();
 
@@ -653,9 +633,9 @@ public class PortalManager {
             }
 
             if (!targetPair.hasPortalA()) {
-                targetPair.setPortalA(myLoc, playerName, isPrivate, facing);
+                targetPair.setPortalA(myLoc, playerName, facing);
             } else if (!targetPair.hasPortalB()) {
-                targetPair.setPortalB(myLoc, playerName, isPrivate, facing);
+                targetPair.setPortalB(myLoc, playerName, facing);
             }
 
             portals.put(newPairId, targetPair);
@@ -677,7 +657,7 @@ public class PortalManager {
         }
 
         Portal newPortal = new Portal(newName, woolColor);
-        newPortal.setPortalA(myLoc, playerName, isPrivate, facing);
+        newPortal.setPortalA(myLoc, playerName, facing);
         portals.put(newPairId, newPortal);
 
         Bukkit.getScheduler().runTask(plugin, () -> {

@@ -15,7 +15,6 @@ public class Portal {
     private int xA, yA, zA;
     private String ownerA;
     private long createdAtA;
-    private boolean privateA;
     private boolean disabledA;
     private transient BlockFace facingA;
 
@@ -23,7 +22,6 @@ public class Portal {
     private int xB, yB, zB;
     private String ownerB;
     private long createdAtB;
-    private boolean privateB;
     private boolean disabledB;
     private transient BlockFace facingB;
 
@@ -36,25 +34,23 @@ public class Portal {
         this.pairId = name + "_" + woolColor;
     }
 
-    public void setPortalA(Location signLoc, String owner, boolean isPrivate, BlockFace signFacing) {
+    public void setPortalA(Location signLoc, String owner, BlockFace signFacing) {
         this.worldA = signLoc.getWorld().getName();
         this.xA = signLoc.getBlockX();
         this.yA = signLoc.getBlockY();
         this.zA = signLoc.getBlockZ();
         this.ownerA = owner;
-        this.privateA = isPrivate;
         this.facingA = signFacing;
         this.createdAtA = System.currentTimeMillis();
         this.cachedLocationA = signLoc.clone();
     }
 
-    public void setPortalB(Location signLoc, String owner, boolean isPrivate, BlockFace signFacing) {
+    public void setPortalB(Location signLoc, String owner, BlockFace signFacing) {
         this.worldB = signLoc.getWorld().getName();
         this.xB = signLoc.getBlockX();
         this.yB = signLoc.getBlockY();
         this.zB = signLoc.getBlockZ();
         this.ownerB = owner;
-        this.privateB = isPrivate;
         this.facingB = signFacing;
         this.createdAtB = System.currentTimeMillis();
         this.cachedLocationB = signLoc.clone();
@@ -98,8 +94,6 @@ public class Portal {
     public int getZA() { return zA; }
     public String getOwnerA() { return ownerA; }
     public long getCreatedAtA() { return createdAtA; }
-    public boolean isPrivateA() { return privateA; }
-    public void setPrivateA(boolean p) { this.privateA = p; }
     public BlockFace getFacingA() { return facingA; }
 
     public String getWorldB() { return worldB; }
@@ -108,8 +102,6 @@ public class Portal {
     public int getZB() { return zB; }
     public String getOwnerB() { return ownerB; }
     public long getCreatedAtB() { return createdAtB; }
-    public boolean isPrivateB() { return privateB; }
-    public void setPrivateB(boolean p) { this.privateB = p; }
     public BlockFace getFacingB() { return facingB; }
     void setFacingA(BlockFace f) { this.facingA = f; }
     void setFacingB(BlockFace f) { this.facingB = f; }
