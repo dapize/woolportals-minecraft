@@ -18,19 +18,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PortalManager {
 
     private final WoolPortals plugin;
+    private final ConfigManager config;
     private final Map<String, Portal> portals;
     private final File dataFile;
 
-    private static final int COOLDOWN_SECONDS = 3;
     private final Map<UUID, Long> cooldowns;
 
-    public PortalManager(WoolPortals plugin) {
+    public PortalManager(WoolPortals plugin, ConfigManager config) {
         this.plugin = plugin;
+        this.config = config;
         this.portals = new ConcurrentHashMap<>();
         this.cooldowns = new ConcurrentHashMap<>();
         this.dataFile = new File(plugin.getDataFolder(), "portals.yml");
 
-        Bukkit.getScheduler().runTaskTimer(plugin, this::savePortals, 6000L, 6000L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::savePortals,
+            config.getAutoSaveIntervalTicks(), config.getAutoSaveIntervalTicks());
     }
 
     public enum CreateStatus {
@@ -185,10 +187,13 @@ public class PortalManager {
 
         UUID playerId = player.getUniqueId();
         long now = System.currentTimeMillis();
-        Long lastUsed = cooldowns.get(playerId);
-        if (lastUsed != null && (now - lastUsed) < COOLDOWN_SECONDS * 1000) {
-            player.sendMessage(ChatColor.RED + "Espera " + COOLDOWN_SECONDS + " segundos entre usos.");
-            return false;
+        int cooldownSecs = config.getCooldownSeconds();
+        if (cooldownSecs > 0) {
+            Long lastUsed = cooldowns.get(playerId);
+            if (lastUsed != null && (now - lastUsed) < cooldownSecs * 1000L) {
+                player.sendMessage(ChatColor.RED + "Espera " + cooldownSecs + " segundos entre usos.");
+                return false;
+            }
         }
 
         Location target;
@@ -206,8 +211,12 @@ public class PortalManager {
         player.teleport(target);
         cooldowns.put(playerId, now);
 
-        player.getWorld().spawnParticle(Particle.PORTAL, player.getLocation(), 50, 0.5, 1.0, 0.5, 0.1);
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.0f);
+        if (config.isParticleEnabled()) {
+            player.getWorld().spawnParticle(config.getTeleportParticle(), player.getLocation(), 50, 0.5, 1.0, 0.5, 0.1);
+        }
+        if (config.isSoundEnabled()) {
+            player.getWorld().playSound(player.getLocation(), config.getTeleportSound(), 0.5f, 1.0f);
+        }
 
         player.sendMessage(ChatColor.LIGHT_PURPLE + "¡Woosh!");
 

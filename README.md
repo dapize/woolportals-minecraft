@@ -31,6 +31,33 @@ El control de acceso a los portales se maneja mediante claims de GriefPrevention
   WWW
 ```
 
+## Configuración
+
+Al iniciar por primera vez se genera `plugins/WoolPortals/config.yml`:
+
+```yaml
+# WoolPortals config
+
+# Segundos de espera entre usos del portal (0 = sin cooldown)
+cooldown-seconds: 3
+
+# Cada cuantos ticks se guardan los portales a disco (12000 = 10 min, 6000 = 5 min)
+auto-save-interval-ticks: 12000
+
+# Sonido al teletransportarse ("none" para desactivar)
+teleport-sound: ENTITY_ENDERMAN_TELEPORT
+
+# Particulas al teletransportarse ("none" para desactivar)
+teleport-particle: PORTAL
+```
+
+| Opción | Default | Descripción |
+|--------|:-------:|-------------|
+| `cooldown-seconds` | `3` | Segundos entre usos. `0` lo desactiva |
+| `auto-save-interval-ticks` | `12000` | Frecuencia de guardado a disco (20 ticks = 1s). `12000` = 10 min |
+| `teleport-sound` | `ENTITY_ENDERMAN_TELEPORT` | Sonido al teletransportarse. `none` desactiva |
+| `teleport-particle` | `PORTAL` | Partículas al teletransportarse. `none` desactiva |
+
 ## Permisos
 
 | Permiso | Descripción | Default |
@@ -56,7 +83,7 @@ El control de acceso a los portales se maneja mediante claims de GriefPrevention
 
 ## Instalación
 
-1. Descarga `WoolPortals-0.2.0.jar`
+1. Descarga `WoolPortals-0.2.3.jar`
 2. Colócalo en la carpeta `plugins/` de tu servidor
 3. Reinicia el servidor
 
@@ -73,7 +100,7 @@ El control de acceso a los portales se maneja mediante claims de GriefPrevention
 mvn clean package
 ```
 
-El archivo `.jar` se genera en `target/WoolPortals-0.2.0.jar`. Cópialo a la carpeta `plugins/` de tu servidor.
+El archivo `.jar` se genera en `target/WoolPortals-0.2.3.jar`. Cópialo a la carpeta `plugins/` de tu servidor.
 
 ### Sin Maven instalado
 

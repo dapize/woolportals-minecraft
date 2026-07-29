@@ -5,6 +5,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class WoolPortals extends JavaPlugin {
 
     private PortalManager portalManager;
+    private ConfigManager configManager;
 
     @Override
     public void onEnable() {
@@ -12,7 +13,10 @@ public final class WoolPortals extends JavaPlugin {
             getDataFolder().mkdirs();
         }
 
-        portalManager = new PortalManager(this);
+        configManager = new ConfigManager(this);
+        configManager.load();
+
+        portalManager = new PortalManager(this, configManager);
         portalManager.loadPortals();
 
         getServer().getPluginManager().registerEvents(new PortalListener(this, portalManager), this);
@@ -27,6 +31,10 @@ public final class WoolPortals extends JavaPlugin {
             portalManager.savePortals();
         }
         getLogger().info("WoolPortals disabled.");
+    }
+
+    public ConfigManager getConfigManager() {
+        return configManager;
     }
 
     public PortalManager getPortalManager() {

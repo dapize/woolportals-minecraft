@@ -1,5 +1,5 @@
 name: WoolPortals
-version: "0.2.1"
+version: "0.2.3"
 main: com.hakuamatata.woolportals.WoolPortals
 api-version: "1.21"
 description: Wool-based teleport portals for Hakuna matata

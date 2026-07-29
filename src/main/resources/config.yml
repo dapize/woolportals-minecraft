@@ -1,0 +1,12 @@
+# WoolPortals config
+# Segundos de espera entre usos del portal (0 = sin cooldown)
+cooldown-seconds: 3
+
+# Cada cuantos ticks se guardan los portales a disco (12000 = 10 min, 6000 = 5 min)
+auto-save-interval-ticks: 6000
+
+# Sonido al teletransportarse ("none" para desactivar)
+teleport-sound: ENTITY_ENDERMAN_TELEPORT
+
+# Particulas al teletransportarse ("none" para desactivar)
+teleport-particle: PORTAL
