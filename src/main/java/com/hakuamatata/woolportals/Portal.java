@@ -186,7 +186,7 @@ public class Portal {
         BlockFace signFacing = portalNumber == 0 ? facingA : facingB;
         if (signLoc == null) return null;
 
-        Location exit = signLoc.clone().add(0.5, -1.5, 0.5);
+        Location exit = signLoc.clone().add(0.5, -2.0, 0.5);
         exit.setYaw(yawFromFacing(signFacing));
         exit.setPitch(0);
         return exit;
