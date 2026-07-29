@@ -104,7 +104,9 @@ public class PortalListener implements Listener {
         }
 
         boolean nameChanged = !line1.equalsIgnoreCase(portal.getName());
-        boolean privChanged = !line2.equalsIgnoreCase(isB ? (portal.isPrivateB() ? "privado" : "") : (portal.isPrivateA() ? "privado" : ""));
+        boolean currentlyPrivate = isB ? portal.isPrivateB() : portal.isPrivateA();
+        boolean lineWantsPrivate = line2.equalsIgnoreCase("privado") || line2.equalsIgnoreCase("private");
+        boolean privChanged = currentlyPrivate != lineWantsPrivate;
         boolean isDisabled = isB ? portal.isDisabledB() : portal.isDisabledA();
 
         BlockFace currentFacing = getSignFacingSafe(sign);
@@ -112,6 +114,15 @@ public class PortalListener implements Listener {
             if (portal.getFacingB() != currentFacing) portal.setFacingB(currentFacing);
         } else {
             if (portal.getFacingA() != currentFacing) portal.setFacingA(currentFacing);
+        }
+
+        if (privChanged) {
+            if (isB) {
+                portal.setPrivateB(lineWantsPrivate);
+            } else {
+                portal.setPrivateA(lineWantsPrivate);
+            }
+            player.sendMessage(ChatColor.GREEN + "Privacidad actualizada.");
         }
 
         if (nameChanged) {
@@ -123,15 +134,6 @@ public class PortalListener implements Listener {
             }
             player.sendMessage(ChatColor.GREEN + "Portal renombrado a '" + line1 + "'.");
             return;
-        }
-
-        if (privChanged) {
-            if (isB) {
-                portal.setPrivateB(line2.equalsIgnoreCase("privado"));
-            } else {
-                portal.setPrivateA(line2.equalsIgnoreCase("privado"));
-            }
-            player.sendMessage(ChatColor.GREEN + "Privacidad actualizada.");
         }
 
         if (isDisabled) {
@@ -185,7 +187,7 @@ public class PortalListener implements Listener {
         return BlockFace.NORTH;
     }
 
-    @EventHandler(priority = EventPriority.NORMAL)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getHand() == EquipmentSlot.OFF_HAND) return;
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;

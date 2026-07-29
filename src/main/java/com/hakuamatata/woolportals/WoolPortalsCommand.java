@@ -167,7 +167,7 @@ public class WoolPortalsCommand implements CommandExecutor {
         sender.sendMessage(ChatColor.WHITE + "4. En el letrero escribe:");
         sender.sendMessage(ChatColor.YELLOW + "   Linea 1: #" + (sender instanceof Player ? ((Player) sender).getName() : "tunombre"));
         sender.sendMessage(ChatColor.YELLOW + "   Linea 2: nombre-del-portal");
-        sender.sendMessage(ChatColor.YELLOW + "   Linea 3: privado (opcional)");
+        sender.sendMessage(ChatColor.YELLOW + "   Linea 3: privado/private (opcional)");
         sender.sendMessage(ChatColor.WHITE + "5. Construye otro portal igual en otro lado");
         sender.sendMessage(ChatColor.WHITE + "   con el mismo nombre y color de lana.");
         sender.sendMessage(ChatColor.GRAY + "Portales del mismo color + nombre se enlazan automaticamente.");

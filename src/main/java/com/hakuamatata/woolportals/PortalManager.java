@@ -53,7 +53,7 @@ public class PortalManager {
         String portalName  = line1 != null ? line1.trim() : "";
         String optionLine  = line2 != null ? line2.trim().toLowerCase() : "";
 
-        boolean isPrivate = optionLine.equals("privado");
+        boolean isPrivate = optionLine.equals("privado") || optionLine.equals("private");
 
         if (!rawLine1.equalsIgnoreCase("#" + playerName)) {
             return new CreateResult(CreateStatus.INVALID_USER, null);
@@ -186,11 +186,16 @@ public class PortalManager {
             return false;
         }
 
-        if ((portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA()))
-                || (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB()))) {
-            String owner = portal.isPrivateA() ? portal.getOwnerA() : portal.getOwnerB();
-            player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + owner + " puede usarlo.");
-            return false;
+        if (isPortalA) {
+            if (portal.isPrivateA() && !player.getName().equalsIgnoreCase(portal.getOwnerA())) {
+                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerA() + " puede usarlo.");
+                return false;
+            }
+        } else {
+            if (portal.isPrivateB() && !player.getName().equalsIgnoreCase(portal.getOwnerB())) {
+                player.sendMessage(ChatColor.RED + "Este portal es privado. Solo " + portal.getOwnerB() + " puede usarlo.");
+                return false;
+            }
         }
 
         UUID playerId = player.getUniqueId();
