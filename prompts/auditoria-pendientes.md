@@ -30,29 +30,9 @@ Eliminados 4 métodos duplicados (`PortalManager.findAndSetSign`, `PortalListene
 
 ---
 
-## 2. CRÍTICO — Comparación de dueño con `equals` en vez de `equalsIgnoreCase`
+## 2. ~~CRÍTICO — Comparación de dueño con `equals` en vez de `equalsIgnoreCase`~~ COMPLETADO
 
-### Hallazgo
-
-En `PortalManager.java:267`:
-```java
-if (!destroyer.getName().equals(owner) && !destroyer.hasPermission("woolportals.admin"))
-```
-El resto del código usa consistentemente `equalsIgnoreCase` para comparar nombres de jugador. Esta inconsistencia puede impedir que un jugador destruya su propio portal si su nombre tiene capitalización diferente al momento de creación.
-
-### Archivos implicados
-
-- `PortalManager.java:267`
-
-### Análisis previo obligatorio
-
-1. Buscar TODAS las comparaciones de strings que involucren `player.getName()` o `ownerA`/`ownerB` en todo el proyecto. Clasificarlas en "usa equalsIgnoreCase" y "usa equals".
-2. Verificar si hay algún caso donde `equals` estricto sea intencionado (no parece).
-3. Este cambio es trivial y sin efectos colaterales. La migración a UUID (tarea #6) hará que las comparaciones por nombre desaparezcan, pero corregir esto ahora evita bugs en cualquier versión intermedia del código.
-
-### Solución propuesta
-
-- Cambiar `equals` por `equalsIgnoreCase` en la línea 267 de `PortalManager.java`.
+Corregido: se cambió `equals` por `equalsIgnoreCase` en la comparación de dueño de `removePortalAtSign`. Además, se eliminaron por completo los checks de permiso `woolportals.destroy` y de dueño en `removePortalAtSign`, ya que la protección de bloques la maneja un plugin de claims externo. El permiso `woolportals.destroy` fue eliminado de `plugin.yml`.
 
 ---
 
@@ -499,5 +479,39 @@ Si un portal enlazado se renombra de "A" a "B" y luego de "B" a "A", el re-enlac
   2. En su lugar, limpiar solo el lado que se va del `Portal` original (ej: si se renombró B, hacer `portal.clearB()` + `portal.setDisabledB(true)`).
   3. El `Portal` original se queda en el mapa con un solo lado (el huérfano), en estado DISABLED.
   4. Si luego alguien renombra de vuelta al nombre original, `targetPair` será el `Portal` original (aún en el mapa) y el re-enlace funcionará.
-  5. Poner el letrero del huérfano en OFF (ya se hace).
+   5. Poner el letrero del huérfano en OFF (ya se hace).
+
+---
+
+## 16. ALTO — Portales siguen funcionales aunque se rompan los letreros
+
+### Hallazgo
+
+En pruebas de la tarea #2 se descubrió que tras romper **ambos** letreros de un par de portales enlazados, los portales seguían funcionando (teletransporte activo) incluso tras reiniciar el servidor.
+
+El portal usa el letrero solo para display (ON/OFF) y para identificar dueño/nombre en creación. En tiempo de teletransporte, `isComplete()` solo verifica que ambos lados tengan `world != null && !disabled`. El letrero no se verifica. Si ambos letreros se rompen pero `removePortalAtSign` no se ejecuta (o falla), el portal sigue operativo.
+
+### Causa raíz
+
+**Causa 1 (corregida en tarea #2):** Los checks de permiso `woolportals.destroy` y dueño dentro de `removePortalAtSign` impedían que el método corriera si quien rompía el letrero no era el dueño o no tenía el permiso. Esto ya fue eliminado.
+
+**Causa 2 (persistente):** Si el auto-save no se ejecutó entre la rotura de los letreros y el reinicio del servidor, `portals.yml` en disco aún contiene los datos del portal con ambos lados activos. Al reiniciar, el portal se restaura completo desde disco. `removePortalAtSign` limpia los datos en memoria, pero `savePortals()` necesitaría ejecutarse antes del reinicio para persistir el cambio.
+
+### Archivos implicados
+
+- `PortalManager.java:231-316` — `removePortalAtSign`
+- `PortalManager.java:510-553` — `savePortals`
+- `PortalListener.java:205-248` — `onBlockBreak`
+
+### Análisis previo obligatorio
+
+1. Confirmar que `removePortalAtSign` limpia correctamente en memoria los datos del portal cuando se rompe un letrero (sí, lo hace).
+2. Identificar el gap: entre la rotura del letrero y el siguiente auto-save (cada 10 min), si el servidor se reinicia, los datos no persisten. Solución: forzar un `savePortals()` inmediato tras `removePortalAtSign`.
+3. Evaluar si conviene un save asíncrono o síncrono. Un save síncrono en cada rotura de letrero es seguro (no hay riesgo de concurrencia porque `onBlockBreak` es en main thread y es poco frecuente), pero la tarea #9 propone migrar todo a asíncrono con `AtomicBoolean`. Coordinar con esa tarea.
+4. Evaluar si `removePortalAtSign` debería forzar `savePortals()` o si el caller (`onBlockBreak`) debería hacerlo. Lo más limpio es que `removePortalAtSign` fuerce el save tras modificar datos.
+
+### Solución propuesta
+
+- En `removePortalAtSign`, tras modificar el portal (disable/clear/remove), llamar a `savePortals()` para persistir inmediatamente.
+- Si se implementó la tarea #9 (save asíncrono), coordinar para que este save use el mismo mecanismo.
 

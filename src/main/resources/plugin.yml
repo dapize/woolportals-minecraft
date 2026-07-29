@@ -13,9 +13,6 @@ permissions:
   woolportals.create:
     description: Allows creating wool portals
     default: true
-  woolportals.destroy:
-    description: Allows destroying own wool portals
-    default: true
   woolportals.admin:
     description: Admin commands for wool portals
     default: op

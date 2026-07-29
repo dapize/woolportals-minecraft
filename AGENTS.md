@@ -46,8 +46,7 @@ Cada portal se identifica por un `pairId` compuesto: `nombreDelPortal + "_" + co
 |---|---|
 | `woolportals.use` | Usar portales (teletransportarse) |
 | `woolportals.create` | Crear portales |
-| `woolportals.destroy` | Destruir portales propios |
-| `woolportals.admin` | Ver/recargar todos los portales, destruir portales ajenos |
+| `woolportals.admin` | Ver/recargar todos los portales |
 
 ## Cosas que debes saber antes de tocar el código
 

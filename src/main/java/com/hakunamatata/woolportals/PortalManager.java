@@ -259,16 +259,6 @@ public class PortalManager {
 
         if (found == null) return null;
 
-        String owner = isPortalA ? found.getOwnerA() : found.getOwnerB();
-        if (!destroyer.hasPermission("woolportals.destroy")) {
-            destroyer.sendMessage(ChatColor.RED + "No tienes permiso para destruir portales.");
-            return null;
-        }
-        if (!destroyer.getName().equals(owner) && !destroyer.hasPermission("woolportals.admin")) {
-            destroyer.sendMessage(ChatColor.RED + "Solo " + owner + " puede destruir este portal.");
-            return null;
-        }
-
         final Portal portal = found;
         final boolean isA = isPortalA;
         final boolean hasOther = isA ? portal.hasPortalB() : portal.hasPortalA();
