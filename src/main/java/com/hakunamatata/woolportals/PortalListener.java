@@ -1,4 +1,4 @@
-package com.hakuamatata.woolportals;
+package com.hakunamatata.woolportals;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;

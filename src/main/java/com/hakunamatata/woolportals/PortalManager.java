@@ -1,4 +1,4 @@
-package com.hakuamatata.woolportals;
+package com.hakunamatata.woolportals;
 
 import org.bukkit.*;
 import org.bukkit.block.Block;
