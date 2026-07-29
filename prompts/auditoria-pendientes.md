@@ -42,42 +42,9 @@ Eliminado el método `isPortalTooClose()` de `PortalManager.java`. Era código m
 
 ---
 
-## 4. MEDIO — Try-catch robusto en `loadPortals()` para YAML malformado
+## 4. ~~MEDIO — Try-catch robusto en `loadPortals()` para YAML malformado~~ COMPLETADO
 
-### Hallazgo
-
-`PortalManager.java:448-497` tiene casteos sin protección:
-
-```java
-int x = (Integer) a.get("x");       // ClassCastException si no es Integer
-BlockFace.valueOf(facingStr);        // IllegalArgumentException si string inválido
-```
-
-Si el archivo `portals.yml` se corrompe (edición manual incorrecta, fallo de disco), el plugin lanza una excepción no capturada y **no arranca** o crashea al hacer `/wp reload`.
-
-**Riesgo detectado en revisión:** El casteo exterior `(List<Map<String, Object>>) config.getList("portals")` (línea 454) está FUERA del bucle. Si `portals.yml` tiene `portals: "texto_cualquiera"`, la `ClassCastException` vuela antes de entrar al `for` y el try-catch propuesto dentro del bucle no lo atraparía. Hay que cubrir también ese casteo externo.
-
-**Confirmación necesaria:** Si un portal se lee a medias (portal A exitoso, portal B falla el casteo), el `continue` impide llegar a `portals.put(...)`, así que no se añade estado inconsistente al mapa. Verificar esto en el código.
-
-### Archivos implicados
-
-- `PortalManager.java:448-497`
-
-### Análisis previo obligatorio
-
-1. Leer el método `loadPortals()` completo. Identificar cada línea con casteo y con `valueOf`.
-2. El casteo de la lista exterior requiere su propio chequeo: `instanceof List<?>` y luego validar cada elemento.
-3. Para cada elemento del bucle, envolver en try-catch y en caso de fallo loguear warning + `continue`.
-4. Para `BlockFace.valueOf`, usar try-catch interno con fallback a `BlockFace.NORTH` + warning.
-5. Para casteos numéricos, usar `instanceof Number` con `((Number) obj).intValue()`.
-
-### Solución propuesta
-
-- Validar que `config.getList("portals")` retorna una `List<?>` antes del bucle.
-- Iterar cada elemento con `instanceof Map<?,?>` antes de castear.
-- Envolver la lectura de cada portal individual en try-catch con `continue`.
-- Usar `instanceof Number` para coordenadas en vez de `(Integer)`.
-- Usar try-catch para `BlockFace.valueOf` con default `NORTH`.
+Refactorizado `loadPortals()` en `PortalManager.java` con validaciones defensivas: (1) `instanceof List<?>` en el casteo exterior de `portals`, (2) `instanceof Map<?,?>` para cada elemento del bucle, (3) try-catch envolviendo cada portal individual con `continue` + warning en fallo, (4) `instanceof Number` con `((Number) obj).intValue()` para coordenadas en vez de casteo directo a `Integer`, (5) try-catch en `BlockFace.valueOf` con fallback a `NORTH` + warning. Se añadieron dos helpers privados: `toInt(Object)` y `parseFacing(String)`. Probado en servidor: portales válidos cargan normalmente; entradas corruptas se saltan con warning en consola sin crashear el plugin.
 
 ---
 

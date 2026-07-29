@@ -446,49 +446,92 @@ public class PortalManager {
         if (!dataFile.exists()) return;
 
         FileConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
-        List<Map<String, Object>> portalList = (List<Map<String, Object>>) config.getList("portals");
-        if (portalList == null) return;
 
-        for (Map<String, Object> map : portalList) {
-            String name = (String) map.get("name");
-            String color = (String) map.get("color");
+        Object rawList = config.get("portals");
+        if (rawList == null) return;
 
-            Portal portal = new Portal(name, color);
-
-            Map<String, Object> a = (Map<String, Object>) map.get("portalA");
-            if (a != null) {
-                World world = Bukkit.getWorld((String) a.get("world"));
-                if (world != null) {
-                    int x = (Integer) a.get("x");
-                    int y = (Integer) a.get("y");
-                    int z = (Integer) a.get("z");
-                    boolean dis = a.get("disabled") instanceof Boolean b && b;
-                    String facingStr = (String) a.get("facing");
-                    portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"),
-                        facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
-                    if (dis) portal.setDisabledA(true);
-                }
-            }
-
-            Map<String, Object> b = (Map<String, Object>) map.get("portalB");
-            if (b != null) {
-                World world = Bukkit.getWorld((String) b.get("world"));
-                if (world != null) {
-                    int x = (Integer) b.get("x");
-                    int y = (Integer) b.get("y");
-                    int z = (Integer) b.get("z");
-                    boolean dis = b.get("disabled") instanceof Boolean bool && bool;
-                    String facingStr = (String) b.get("facing");
-                    portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"),
-                        facingStr != null ? BlockFace.valueOf(facingStr) : BlockFace.NORTH);
-                    if (dis) portal.setDisabledB(true);
-                }
-            }
-
-            portals.put(portal.getPairId(), portal);
+        if (!(rawList instanceof List<?>)) {
+            plugin.getLogger().warning("portals.yml: 'portals' key is not a list, skipping portal loading.");
+            return;
         }
 
+        List<?> portalList = (List<?>) rawList;
+        int skipped = 0;
+
+        for (Object item : portalList) {
+            if (!(item instanceof Map<?, ?>)) {
+                skipped++;
+                continue;
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) item;
+
+            try {
+                String name = (String) map.get("name");
+                String color = (String) map.get("color");
+
+                if (name == null || color == null) {
+                    skipped++;
+                    continue;
+                }
+
+                Portal portal = new Portal(name, color);
+
+                Map<String, Object> a = (Map<String, Object>) map.get("portalA");
+                if (a != null) {
+                    World world = Bukkit.getWorld((String) a.get("world"));
+                    if (world != null) {
+                        int x = toInt(a.get("x"));
+                        int y = toInt(a.get("y"));
+                        int z = toInt(a.get("z"));
+                        boolean dis = a.get("disabled") instanceof Boolean b && b;
+                        portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"),
+                            parseFacing((String) a.get("facing")));
+                        if (dis) portal.setDisabledA(true);
+                    }
+                }
+
+                Map<String, Object> b = (Map<String, Object>) map.get("portalB");
+                if (b != null) {
+                    World world = Bukkit.getWorld((String) b.get("world"));
+                    if (world != null) {
+                        int x = toInt(b.get("x"));
+                        int y = toInt(b.get("y"));
+                        int z = toInt(b.get("z"));
+                        boolean dis = b.get("disabled") instanceof Boolean bool && bool;
+                        portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"),
+                            parseFacing((String) b.get("facing")));
+                        if (dis) portal.setDisabledB(true);
+                    }
+                }
+
+                portals.put(portal.getPairId(), portal);
+            } catch (Exception e) {
+                skipped++;
+                plugin.getLogger().warning("Failed to load portal entry from portals.yml, skipping: " + e.getMessage());
+            }
+        }
+
+        if (skipped > 0) {
+            plugin.getLogger().warning("Skipped " + skipped + " malformed portal entries from portals.yml.");
+        }
         plugin.getLogger().info("Loaded " + portals.size() + " portal pairs from disk.");
+    }
+
+    private int toInt(Object obj) {
+        if (obj instanceof Number) return ((Number) obj).intValue();
+        return 0;
+    }
+
+    private BlockFace parseFacing(String facingStr) {
+        if (facingStr == null) return BlockFace.NORTH;
+        try {
+            return BlockFace.valueOf(facingStr);
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid BlockFace '" + facingStr + "' in portals.yml, defaulting to NORTH.");
+            return BlockFace.NORTH;
+        }
     }
 
     public void savePortals() {
