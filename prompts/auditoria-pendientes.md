@@ -36,26 +36,9 @@ Corregido: se cambió `equals` por `equalsIgnoreCase` en la comparación de due�
 
 ---
 
-## 3. BAJO — Código muerto: eliminar `isPortalTooClose`
+## 3. ~~BAJO — Código muerto: eliminar `isPortalTooClose`~~ COMPLETADO
 
-### Hallazgo
-
-`PortalManager.java:441-445` define el método `isPortalTooClose()` pero **nunca se invoca** desde ninguna parte del proyecto.
-
-### Archivos implicados
-
-- `PortalManager.java:441-445`
-
-### Análisis previo obligatorio
-
-1. Hacer una búsqueda exhaustiva en todo el proyecto del string `isPortalTooClose` para confirmar que no tiene llamadas.
-2. Evaluar si la funcionalidad que pretendía (evitar portales solapados a menos de 5 bloques) es deseable. Si es así, en vez de borrarlo, integrarlo en `validateAndCreatePortal`.
-3. Si se decide integrarlo, verificar que la lógica de detección de cercanía compara ubicaciones de lana y añadir un nuevo `CreateStatus.TOO_CLOSE` con su mensaje correspondiente en `PortalListener`.
-
-### Solución propuesta
-
-- Si no se desea la funcionalidad: eliminar el método.
-- Si se desea: integrarlo en `validateAndCreatePortal`.
+Eliminado el método `isPortalTooClose()` de `PortalManager.java`. Era código muerto sin llamadas en todo el proyecto. Probado en servidor: creación, enlace, teletransporte, destrucción, reparación, renombrado, comandos y reinicio funcionan correctamente.
 
 ---
 

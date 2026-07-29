@@ -439,12 +439,6 @@ public class PortalManager {
         return count;
     }
 
-    private boolean isPortalTooClose(Location existing, Location newLoc) {
-        if (existing == null || newLoc == null) return false;
-        if (!existing.getWorld().equals(newLoc.getWorld())) return false;
-        return existing.distance(newLoc) < 5;
-    }
-
     @SuppressWarnings("unchecked")
     public void loadPortals() {
         portals.clear();
