@@ -13,50 +13,20 @@ Las tareas están ordenadas por prioridad de implementación: de más inocuas (b
 1. **Tómate tu tiempo, no hay prisa.** Leer todo el código relevante antes de tocar una sola línea. Entender qué hace cada clase y cómo se relacionan entre sí.
 2. **Prioriza calidad sobre velocidad.** No tomar atajos. Si una solución requiere refactorizar más archivos de los esperados, hazlo. El resultado debe ser mantenible a largo plazo.
 3. **No asumas nada, compruébalo todo.** Cada afirmación debe verificarse contra el código fuente real. Si el análisis previo contradice lo descrito en este prompt, actualiza el enfoque y explica por qué.
+4. **Flujo de pruebas QA obligatorio.** Al terminar una tarea:
+   - Compila el plugin y copia el JAR a la carpeta `plugins/` del servidor de pruebas (`~/Desktop/servamc/`).
+   - Redacta un plan de pruebas paso a paso dirigido a un QA humano, cubriendo los escenarios impactados por la tarea (creación, enlace, destrucción, reparación, renombrado, comandos, etc. según aplique).
+   - El QA ejecuta las pruebas, reporta resultados y cualquier comportamiento inesperado.
+   - Si hay bugs encontrados durante las pruebas, evalúa si son pre-existentes o introducidos por la tarea:
+     - **Bugs introducidos:** corrígelos en el momento.
+     - **Bugs pre-existentes no cubiertos por el documento:** agrégalos como nuevas tareas al final del documento.
+   - Solo cuando las pruebas pasan satisfactoriamente se marca la tarea como `COMPLETADO` y se reescribe su sección con un resumen conciso (sin el análisis detallado, para no generar ruido en futuras sesiones).
 
 ---
 
-## 1. BAJO — Unificar métodos duplicados de búsqueda y actualización de letreros (DRY)
+## 1. ~~BAJO — Unificar métodos duplicados de búsqueda y actualización de letreros (DRY)~~ COMPLETADO
 
-### Hallazgo
-
-Existen tres métodos que hacen exactamente lo mismo: iterar sobre `BlockFace[]{NORTH, SOUTH, EAST, WEST, UP}` alrededor de una ubicación de lana, buscar si hay un `Sign`, y actualizar su línea 3 con "ON" u "OFF" en verde o gris.
-
-1. `PortalManager.findAndSetSign(Location woolLoc, boolean on)` — línea 318
-2. `PortalListener.updateSignAt(Location woolLoc, boolean on)` — línea 157
-3. `PortalListener.findSignAtLocAndSet(Location woolLoc, boolean on)` — línea 387
-
-Además hay una cuarta variante `PortalListener.hasSignNear(Location woolLoc)` (línea 376) que solo comprueba existencia sin escribir.
-
-Código copiado y pegado. Si cambia la lógica de búsqueda, hay que modificar 3 o 4 sitios.
-
-**Riesgo detectado en revisión:** `hasSignNear` es de solo consulta. Se usa en `handleWoolPlace` (`PortalListener.java:340`) para verificar si existe un letrero ANTES de intentar reparar el marco. Si se unifica todo en un solo método que siempre escribe en el letrero, se forzaría un "ON"/"OFF" prematuro en el letrero aunque el marco aún no esté listo. **La solución debe mantener separados el método de consulta y el de escritura**, ambos delegando a una lógica de búsqueda compartida privada.
-
-### Archivos implicados
-
-- `PortalManager.java:318-327`
-- `PortalListener.java:157-169, 376-399`
-
-### Análisis previo obligatorio
-
-1. Comparar los cuatro métodos línea por línea. Confirmar cuáles son idénticos y en qué difieren.
-2. Identificar todas las llamadas a estos métodos (dónde se invocan y con qué parámetros).
-3. Diseñar la lógica compartida: un método privado que busque el `Sign` alrededor de la lana y devuelva `Sign` o null. Los métodos públicos serán wrappers:
-   - `boolean hasSignNear(Location woolLoc)` — solo consulta, sin efectos secundarios.
-   - `void updateSignAtWool(Location woolLoc, boolean on)` — escribe la línea 3.
-4. Decidir dónde colocar los métodos unificados.
-   - **Opción A:** Método estático en `PortalManager` (es la clase de lógica de negocio).
-   - **Opción B:** Nueva clase de utilidad `SignHelper`.
-5. Verificar que moverlos no cause dependencias circulares (no debería).
-6. Evaluar si también conviene unificar `setSignStatus` (que recibe un `Block` de sign directamente) con el nuevo `updateSignAtWool`, o si son lo suficientemente distintos.
-
-### Solución propuesta (punto de partida, puede cambiar tras el análisis)
-
-- Crear método privado/estático `findSignNear(Location woolLoc): Sign` que contenga la lógica de búsqueda común.
-- Crear `hasSignNear(Location): boolean` como wrapper de solo consulta.
-- Crear `updateSignAtWool(Location, boolean on): void` como wrapper de escritura.
-- Reemplazar todas las llamadas a los 4 métodos antiguos por los nuevos.
-- Eliminar los métodos duplicados.
+Eliminados 4 métodos duplicados (`PortalManager.findAndSetSign`, `PortalListener.updateSignAt`, `PortalListener.findSignAtLocAndSet`, `PortalListener.hasSignNear`). Unificados en 3 métodos centralizados en `PortalManager`: `findSignNear` (privado, búsqueda), `hasSignNear` (público, solo consulta), `updateSignAtWool` (público, escritura ON/OFF). Los 16 callers fueron actualizados. Probado en servidor: creación, enlace, destrucción y reparación de portales funcionan correctamente.
 
 ---
 
@@ -422,4 +392,112 @@ El proyecto tiene **cero tests**. No hay carpeta `src/test` ni dependencias de t
   - `Portal` — construcción, `isComplete`, `equals`/`hashCode`.
   - `ConfigManager` — parsing de sonidos y partículas válidos e inválidos.
 - No aspirar a 100% de cobertura; apuntar a cubrir la lógica de negocio crítica.
+
+---
+
+## 12. BAJO — Mensaje "marco dañado" falso cuando el portal ya está en OFF
+
+### Hallazgo
+
+En `PortalListener.onBlockBreak` (líneas 219-262), cuando un jugador rompe un bloque de lana de un portal que ya está desactivado (`disabledA=true` o `disabledB=true`), el código ejecuta `isFrameIntact`, detecta que el marco está roto, llama a `disablePortal`, y muestra el mensaje rojo "Marco del portal dañado. Portal desactivado (OFF)." aunque el portal ya estaba en OFF. El mensaje es redundante y confunde al jugador.
+
+### Archivos implicados
+
+- `PortalListener.java:240-246, 251-257`
+
+### Análisis previo obligatorio
+
+1. En `onBlockBreak`, verificar que el bloque roto pertenece al plano de un portal (OK, `isBlockOnPortalPlane` ya lo hace).
+2. Antes de ejecutar `disablePortal`, añadir un guard: si el lado ya está `disabled`, no hacer nada ni mostrar mensaje.
+3. Distinguir si es lado A o B para acceder a `portal.isDisabledA()` / `portal.isDisabledB()`.
+
+### Solución propuesta
+
+- Antes de `if (!portalManager.isFrameIntact(p, false))`, verificar `if (portal.isDisabledA()) return;`.
+- Antes de `if (!portalManager.isFrameIntact(p, true))`, verificar `if (portal.isDisabledB()) return;`.
+
+---
+
+## 13. BAJO — Botón de portal huérfano no responde (sin mensaje de error)
+
+### Hallazgo
+
+Cuando un portal enlazado se renombra (vía `reassignPortal`), el lado que NO se renombró queda huérfano: su letrero existe, su marco está intacto, pero ya no pertenece a ningún `Portal` en el mapa `portals`. Al presionar su botón, `getPortalAtButton` no encuentra nada (esa ubicación de botón ya no está asociada a ningún portal) y el evento `onPlayerInteract` simplemente retorna sin hacer nada. El jugador no recibe ningún mensaje.
+
+### Archivos implicados
+
+- `PortalListener.java:196-198` — `onPlayerInteract` retorna silenciosamente cuando `getPortalAtButton` devuelve null.
+- `PortalManager.java:633-697` — `reassignPortal` deja el lado huérfano fuera del mapa.
+
+### Análisis previo obligatorio
+
+1. Tras `reassignPortal`, el lado huérfano sigue teniendo un letrero con `#nombre` y un nombre de portal, pero ese `pairId` no existe en `portals`. El marco y el letrero están intactos.
+2. Opciones para manejar el lado huérfano:
+   - **Opción A:** En `onBlockBreak`, si se rompe el letrero de un portal huérfano, detectarlo y limpiarlo (mostrar mensaje adecuado).
+   - **Opción B:** En `reassignPortal`, marcar el letrero del huérfano con algo como "ORPHAN" en línea 4 para que el jugador sepa que debe reconstruirlo.
+   - **Opción C:** En `handleButtonPlace` (que escanea letreros cercanos al colocar un botón), detectar el letrero huérfano y crear un nuevo portal unilateral con él.
+3. La opción C es la más completa: un marco huérfano con letrero válido debería poder reinsertarse en el sistema como un portal nuevo (estado CREATED) al colocar un botón. Pero actualmente `handleButtonPlace` llama a `validateAndCreatePortal` que detecta el `pairId` antiguo (que ya no existe), por lo que sí debería crear un nuevo portal unilateral. **Verificar por qué no funciona:** probablemente el letrero del huérfano usa el nombre antiguo (ej: "casa"), y `reassignPortal` creó un nuevo `pairId` con el nombre nuevo (ej: "casita_BLACK_WOOL"). El huérfano tendría `pairId = "casa_BLACK_WOOL"` que ya no existe. `validateAndCreatePortal` con `portalName = "casa"` + `woolColor` generaría `pairId = "casa_BLACK_WOOL"`, que es el original. Debería funcionar. **Hay que debuggear por qué no lo detecta.**
+4. El problema real puede ser que `handleButtonPlace` escanea todos los letreros cercanos pero `validateAndCreatePortal` requiere que el letrero tenga el formato `#nombredeusuario` en línea 1. Si el letrero huérfano fue escrito por otro jugador o tiene el nombre del dueño original, debería funcionar. **Testear esto.**
+
+### Solución propuesta
+
+- **Inmediata (mínimo):** En `onPlayerInteract`, si `getPortalAtButton` retorna null, verificar si el bloque clickeado es un botón y si hay un letrero con formato `#usuario` cerca; si lo hay pero no hay portal asociado, mostrar mensaje: "No hay un portal activo aquí. Rompe el letrero y vuelve a crearlo."
+- **Completa:** Tras `reassignPortal`, si el lado huérfano tiene marco intacto + letrero, crear automáticamente un nuevo `Portal` unilateral con ese lado (reinsertarlo en `portals`). Esto haría que el botón del huérfano vuelva a funcionar como portal independiente.
+
+---
+
+## 14. BAJO — Mensaje engañoso "Portal destruido" cuando solo se desactiva un lado
+
+### Hallazgo
+
+En `PortalManager.removePortalAtSign`, cuando se rompe el letrero de un portal enlazado, el mensaje final "Portal 'X' destruido" (línea 314) se muestra siempre que `hasOther` es true, sin importar que el par siga existiendo (solo se desactivó un lado, el otro sigue en `/wp list`). El mensaje correcto sería "Lado del portal 'X' destruido. El otro lado sigue activo." o similar.
+
+### Archivos implicados
+
+- `PortalManager.java:314`
+
+### Análisis previo obligatorio
+
+1. Trazar el flujo de `removePortalAtSign`: si `hasOther` es true, se desactiva el lado roto (disabled=true + clear) pero el par NO se elimina del mapa. El mensaje "destruido" es incorrecto.
+2. El mensaje "eliminado completamente" (línea 295) sí es correcto: se muestra cuando ningún lado queda activo y el par se borra del mapa.
+3. La corrección es trivial: cambiar el texto de un mensaje y posiblemente añadir contexto sobre qué pasó con el otro lado.
+
+### Solución propuesta
+
+- Cambiar línea 314: `destroyer.sendMessage(ChatColor.GREEN + "Lado del portal '" + portal.getName() + "' destruido. El otro lado sigue en OFF.");`
+
+---
+
+## 15. BAJO — Renombrar un portal de vuelta a su nombre original no re-enlaza
+
+### Hallazgo
+
+Si un portal enlazado se renombra de "A" a "B" y luego de "B" a "A", el re-enlace no ocurre. Ambos portales quedan en OFF como portales independientes. Esto sucede porque `reassignPortal` extrae el lado renombrado del `Portal` original y crea uno nuevo con el `pairId` nuevo. El lado que quedó atrás (huérfano) fue deshabilitado y su referencia se perdió. Al volver a renombrar a "A", `reassignPortal` busca `pairId = "A_BLACK_WOOL"` en `portals`, pero ese `pairId` ya no existe (fue eliminado en la primera renombrada cuando se hizo `portals.remove(oldPairId)`). El huérfano quedó fuera del mapa para siempre.
+
+### Archivos implicados
+
+- `PortalManager.java:633-697` — `reassignPortal`
+
+### Análisis previo obligatorio
+
+1. En la primera renombrada (A→B):
+   - `oldPairId = "A_BLACK_WOOL"` se elimina del mapa (`portals.remove`).
+   - El lado no renombrado (huérfano) queda referenciado en `orphanLoc` pero solo se usa para poner su letrero en OFF.
+   - El `Portal` original se desecha.
+   - Se crea un nuevo `Portal` con `pairId = "B_BLACK_WOOL"` que contiene solo el lado renombrado.
+2. En la segunda renombrada (B→A):
+   - `oldPairId = "B_BLACK_WOOL"` se elimina.
+   - Se busca `newPairId = "A_BLACK_WOOL"` en `portals`, pero no existe.
+   - El huérfano sigue ahí físicamente pero nunca se reinserta.
+3. **Posible solución:** En `reassignPortal`, antes de desechar el `Portal` original, verificar si el lado huérfano (`orphanLoc`) tiene marco intacto y letrero válido. Si es así, en lugar de abandonarlo, crear un nuevo `Portal` unilateral para él e insertarlo en `portals` con su `pairId` original. Esto permitiría que futuras renombradas lo encuentren.
+4. Alternativa: no eliminar el `oldPairId` del mapa, sino solo limpiar el lado que se va y dejar el huérfano como un portal unilateral con su `pairId` original. Esto es más simple y preserva la capacidad de re-enlace.
+
+### Solución propuesta
+
+- En `reassignPortal`, tras extraer el lado renombrado:
+  1. Si el lado huérfano existe (`orphanLoc != null`), NO eliminar `oldPairId` del mapa.
+  2. En su lugar, limpiar solo el lado que se va del `Portal` original (ej: si se renombró B, hacer `portal.clearB()` + `portal.setDisabledB(true)`).
+  3. El `Portal` original se queda en el mapa con un solo lado (el huérfano), en estado DISABLED.
+  4. Si luego alguien renombra de vuelta al nombre original, `targetPair` será el `Portal` original (aún en el mapa) y el re-enlace funcionará.
+  5. Poner el letrero del huérfano en OFF (ya se hace).
 

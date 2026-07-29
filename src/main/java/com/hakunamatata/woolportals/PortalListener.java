@@ -146,25 +146,11 @@ public class PortalListener implements Listener {
                 () -> {
                     Location locA = portal.getSignLocationA();
                     Location locB = portal.getSignLocationB();
-                    if (locA != null) updateSignAt(locA, portal.isUsableA() && portal.isUsableB());
-                    if (locB != null) updateSignAt(locB, portal.isUsableA() && portal.isUsableB());
+                    if (locA != null) portalManager.updateSignAtWool(locA, portal.isUsableA() && portal.isUsableB());
+                    if (locB != null) portalManager.updateSignAtWool(locB, portal.isUsableA() && portal.isUsableB());
                 });
 
             player.sendMessage(ChatColor.GREEN + "Portal reactivado.");
-        }
-    }
-
-    private void updateSignAt(Location woolLoc, boolean on) {
-        for (BlockFace face : new BlockFace[]{
-            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
-            Block candidate = woolLoc.getBlock().getRelative(face);
-            if (candidate.getState() instanceof Sign sign) {
-                String color = on ? ChatColor.GREEN.toString() : ChatColor.DARK_GRAY.toString();
-                String text = on ? "ON" : "OFF";
-                sign.setLine(3, color + text);
-                sign.update(true);
-                return;
-            }
         }
     }
 
@@ -337,7 +323,7 @@ public class PortalListener implements Listener {
             if (faceB == null) faceB = BlockFace.NORTH;
 
             if (locA != null && portal.isDisabledA() && isBlockOnPortalPlane(block, locA, faceA)) {
-                if (hasSignNear(locA) && portalManager.isFrameIntact(portal, false)) {
+                if (portalManager.hasSignNear(locA) && portalManager.isFrameIntact(portal, false)) {
                     boolean bOk = !portal.hasPortalB()
                         || portalManager.isFrameIntact(portal, true);
                     if (bOk) {
@@ -350,7 +336,7 @@ public class PortalListener implements Listener {
             }
 
             if (locB != null && portal.isDisabledB() && isBlockOnPortalPlane(block, locB, faceB)) {
-                if (hasSignNear(locB) && portalManager.isFrameIntact(portal, true)) {
+                if (portalManager.hasSignNear(locB) && portalManager.isFrameIntact(portal, true)) {
                     boolean aOk = !portal.hasPortalA()
                         || portalManager.isFrameIntact(portal, false);
                     if (aOk) {
@@ -368,35 +354,9 @@ public class PortalListener implements Listener {
         boolean on = portal.isComplete();
         Bukkit.getScheduler().runTask(plugin,
             () -> {
-                if (portal.getSignLocationA() != null) findSignAtLocAndSet(portal.getSignLocationA(), on);
-                if (portal.getSignLocationB() != null) findSignAtLocAndSet(portal.getSignLocationB(), on);
+                if (portal.getSignLocationA() != null) portalManager.updateSignAtWool(portal.getSignLocationA(), on);
+                if (portal.getSignLocationB() != null) portalManager.updateSignAtWool(portal.getSignLocationB(), on);
             });
-    }
-
-    private boolean hasSignNear(Location woolLoc) {
-        if (woolLoc == null || woolLoc.getWorld() == null) return false;
-        for (BlockFace face : new BlockFace[]{
-            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
-            if (woolLoc.getBlock().getRelative(face).getState() instanceof Sign) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void findSignAtLocAndSet(Location woolLoc, boolean on) {
-        if (woolLoc == null || woolLoc.getWorld() == null) return;
-        for (BlockFace face : new BlockFace[]{
-            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
-            Block candidate = woolLoc.getBlock().getRelative(face);
-            if (candidate.getState() instanceof Sign sign) {
-                String color = on ? ChatColor.GREEN.toString() : ChatColor.DARK_GRAY.toString();
-                String text = on ? "ON" : "OFF";
-                sign.setLine(3, color + text);
-                sign.update(true);
-                return;
-            }
-        }
     }
 
 }

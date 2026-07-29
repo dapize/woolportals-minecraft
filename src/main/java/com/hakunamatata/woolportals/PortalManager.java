@@ -156,15 +156,15 @@ public class PortalManager {
 
     private void updateOtherSign(Portal portal, boolean on) {
         Location otherLoc = portal.getSignLocationA();
-        if (otherLoc != null && otherLoc.getWorld() != null) {
-            findAndSetSign(otherLoc, on);
+        if (otherLoc != null) {
+            updateSignAtWool(otherLoc, on);
         }
     }
 
     private void updateOtherSignA(Portal portal, boolean on) {
         Location otherLoc = portal.getSignLocationB();
-        if (otherLoc != null && otherLoc.getWorld() != null) {
-            findAndSetSign(otherLoc, on);
+        if (otherLoc != null) {
+            updateSignAtWool(otherLoc, on);
         }
     }
 
@@ -298,15 +298,15 @@ public class PortalManager {
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (isA) {
-                findAndSetSign(locA, false);
+                updateSignAtWool(locA, false);
             } else {
-                findAndSetSign(locB, false);
+                updateSignAtWool(locB, false);
             }
             if (locA != null && locB != null) {
                 if (isA && portal.isUsableB()) {
-                    findAndSetSign(locB, false);
+                    updateSignAtWool(locB, false);
                 } else if (!isA && portal.isUsableA()) {
-                    findAndSetSign(locA, false);
+                    updateSignAtWool(locA, false);
                 }
             }
         });
@@ -315,14 +315,25 @@ public class PortalManager {
         return portal;
     }
 
-    private void findAndSetSign(Location woolLoc, boolean on) {
-        if (woolLoc == null || woolLoc.getWorld() == null) return;
+    private Sign findSignNear(Location woolLoc) {
+        if (woolLoc == null || woolLoc.getWorld() == null) return null;
         for (BlockFace face : new BlockFace[]{BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP}) {
             Block candidate = woolLoc.getBlock().getRelative(face);
-            if (candidate.getState() instanceof Sign) {
-                setSignStatus(candidate, on);
-                return;
+            if (candidate.getState() instanceof Sign sign) {
+                return sign;
             }
+        }
+        return null;
+    }
+
+    public boolean hasSignNear(Location woolLoc) {
+        return findSignNear(woolLoc) != null;
+    }
+
+    public void updateSignAtWool(Location woolLoc, boolean on) {
+        Sign sign = findSignNear(woolLoc);
+        if (sign != null) {
+            setSignStatus(sign.getBlock(), on);
         }
     }
 
@@ -592,8 +603,8 @@ public class PortalManager {
         Location locB = portal.getSignLocationB();
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (locA != null) findAndSetSign(locA, false);
-            if (locB != null) findAndSetSign(locB, false);
+            if (locA != null) updateSignAtWool(locA, false);
+            if (locB != null) updateSignAtWool(locB, false);
         });
     }
 
@@ -650,7 +661,7 @@ public class PortalManager {
 
         if (orphanLoc != null) {
             final Location orphan = orphanLoc.clone();
-            Bukkit.getScheduler().runTask(plugin, () -> findAndSetSign(orphan, false));
+            Bukkit.getScheduler().runTask(plugin, () -> updateSignAtWool(orphan, false));
         }
 
         if (targetPair != null) {
@@ -680,7 +691,7 @@ public class PortalManager {
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 Location loc = targetPair.getSignLocationA() != null ? targetPair.getSignLocationA() : targetPair.getSignLocationB();
-                if (loc != null) findAndSetSign(loc, false);
+                if (loc != null) updateSignAtWool(loc, false);
             });
             return CreateStatus.CREATED;
         }
@@ -691,7 +702,7 @@ public class PortalManager {
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             Location loc = newPortal.getSignLocationA();
-            if (loc != null) findAndSetSign(loc, false);
+            if (loc != null) updateSignAtWool(loc, false);
         });
         return CreateStatus.CREATED;
     }
