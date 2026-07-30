@@ -58,8 +58,10 @@ public class WoolPortalsCommand implements CommandExecutor {
             if (showAll) {
                 filtered.add(portal);
             } else if (playerName != null) {
-                if (playerName.equalsIgnoreCase(portal.getOwnerA()) ||
-                    playerName.equalsIgnoreCase(portal.getOwnerB())) {
+                PortalSide sa = portal.getSideA();
+                PortalSide sb = portal.getSideB();
+                if ((sa != null && playerName.equalsIgnoreCase(sa.getOwnerName())) ||
+                    (sb != null && playerName.equalsIgnoreCase(sb.getOwnerName()))) {
                     filtered.add(portal);
                 }
             }
@@ -88,9 +90,11 @@ public class WoolPortalsCommand implements CommandExecutor {
             String colorName = formatColor(portal.getWoolColor());
 
             if (showAll) {
-                String owners = ChatColor.GRAY + "#" + portal.getOwnerA();
-                if (portal.hasPortalB()) {
-                    owners += ChatColor.GRAY + " / #" + portal.getOwnerB();
+                PortalSide sa = portal.getSideA();
+                PortalSide sb = portal.getSideB();
+                String owners = ChatColor.GRAY + "#" + (sa != null ? sa.getOwnerName() : "?");
+                if (sb != null) {
+                    owners += ChatColor.GRAY + " / #" + sb.getOwnerName();
                 }
                 sender.sendMessage(ChatColor.AQUA + portal.getName() + " " +
                     ChatColor.WHITE + "(" + colorName + ") " +
@@ -119,15 +123,19 @@ public class WoolPortalsCommand implements CommandExecutor {
 
     private Location getMyLocation(Portal portal, String playerName) {
         if (playerName == null) return null;
-        if (playerName.equalsIgnoreCase(portal.getOwnerA())) return portal.getSignLocationA();
-        if (playerName.equalsIgnoreCase(portal.getOwnerB())) return portal.getSignLocationB();
+        PortalSide sa = portal.getSideA();
+        PortalSide sb = portal.getSideB();
+        if (sa != null && playerName.equalsIgnoreCase(sa.getOwnerName())) return sa.getSignLocation();
+        if (sb != null && playerName.equalsIgnoreCase(sb.getOwnerName())) return sb.getSignLocation();
         return null;
     }
 
     private Location getOtherLocation(Portal portal, String playerName) {
         if (playerName == null) return null;
-        if (playerName.equalsIgnoreCase(portal.getOwnerA())) return portal.getSignLocationB();
-        if (playerName.equalsIgnoreCase(portal.getOwnerB())) return portal.getSignLocationA();
+        PortalSide sa = portal.getSideA();
+        PortalSide sb = portal.getSideB();
+        if (sa != null && playerName.equalsIgnoreCase(sa.getOwnerName())) return sb != null ? sb.getSignLocation() : null;
+        if (sb != null && playerName.equalsIgnoreCase(sb.getOwnerName())) return sa != null ? sa.getSignLocation() : null;
         return null;
     }
 

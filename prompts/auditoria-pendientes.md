@@ -48,43 +48,17 @@ Refactorizado `loadPortals()` en `PortalManager.java` con validaciones defensiva
 
 ---
 
-## 5. ALTO — Refactorizar `Portal` en modelo con `PortalSide` independiente
+## 5. ~~ALTO — Refactorizar `Portal` en modelo con `PortalSide` independiente~~ COMPLETADO
 
-### Hallazgo
+Creada la clase `PortalSide` que encapsula todos los datos de un lado de portal: `worldName`, coordenadas, `ownerName`, `disabled`, `transient facing`, `transient cachedLocation`, `createdAt`. Implementa `init()`, `getSignLocation()`, `getButtonLocation()`, `getExitLocation()`, `isUsable()`, `clear()`, `yawFromFacing()` estatico, y serializacion `toMap()`/`fromMap()` con `facing` manejado manualmente por ser transient.
 
-La clase `Portal.java` almacena dos mitades (A y B) en una misma instancia con campos duplicados: `worldA`/`worldB`, `xA`/`xB`, `ownerA`/`ownerB`, etc. Cada método de `PortalManager` que trabaja con portales tiene lógica condicional `if (isPortalA) ... else ...`. Esto hace el código más verboso, propenso a errores por confusión de lados, y difícil de extender.
+`Portal.java` simplificado: eliminados los ~14 campos duplicados A/B y los ~25 metodos con sufijo A/B. Ahora contiene solo `pairId`, `name`, `woolColor`, `sideA` (PortalSide), `sideB` (PortalSide) con metodos `getSideA()`, `getSideB()`, `hasSideA()`, `hasSideB()`, `isComplete()`, `isButtonForThisPortal()`, `getOrCreateA/B()`.
 
-Esta es la tarea más grande del proyecto pero **conviene hacerla ahora**, antes de la migración a UUID (tarea #6) y el índice de botones (tarea #7), porque ambas se beneficiarán de una estructura de datos más limpia y evitarán retrabajo.
+`PortalManager.java`: todos los metodos que recibian `boolean portalB` (`validateAndCreatePortal`, `removePortalAtSign`, `teleportPlayer`, `reassignPortal`, `isFrameIntact`, `isPlayerInsidePortal`, `disablePortal`, `savePortals`, `loadPortals`) pasaron a recibir o devolver `PortalSide`. Eliminado metodo `toInt` duplicado (ahora en PortalSide). `reassignPortal` recibe `(portal, mySide, orphanSide, ...)` explicito.
 
-### Archivos implicados
+`PortalListener.java` y `WoolPortalsCommand.java` actualizados a la nueva API. En `WoolPortalsCommand`, `getMyLocation`/`getOtherLocation` usan `portal.getSideA()/B()`.
 
-- `Portal.java` — todos los campos y métodos
-- `PortalManager.java` — prácticamente todos los métodos
-- `PortalListener.java` — `handleEdit`, `isPortalB`, `getWoolLoc`
-- `WoolPortalsCommand.java` — `handleList`, `getMyLocation`, `getOtherLocation`
-
-### Análisis previo obligatorio
-
-1. Modelar la nueva estructura ANTES de tocar código: `PortalSide` como clase independiente con sus propios campos y métodos. `Portal` contiene dos `PortalSide` (`sideA`, `sideB`), cada una puede ser `null` si ese lado no existe.
-2. Identificar qué métodos de `Portal` se mueven a `PortalSide` (ej: `getSignLocation`, `getButtonLocation`, `isUsable`, `isDisabled`).
-3. Identificar qué métodos de `PortalManager` se simplifican al delegar en `PortalSide`.
-4. Revisar el método `reassignPortal` — es el más complejo y el más propenso a bugs de referencias compartidas (ver riesgos abajo).
-5. **Atención al campo `facing`:** En `Portal.java`, `facingA` y `facingB` son `transient`. Esto significa que SnakeYAML no las serializa; en `savePortals()` se guardan manualmente como string. `PortalSide` debe mantener `facing` como `transient` y serializarlo manualmente en `toMap()`/`fromMap()`. Si no se marca transient, SnakeYAML fallará al serializar un `BlockFace`.
-6. **Atención a `reassignPortal` y referencias:** Este método mueve lados entre instancias de `Portal`. Con `PortalSide` como objetos, hay peligro de aliasing (dos `Portal` referenciando el mismo `PortalSide`). Decidir explícitamente: ¿se hace deep clone o se transfiere la referencia? Documentarlo.
-7. **Atención a lados nulos en `savePortals`:** Si `sideB` es null, `toMap()` no debe ser llamado. Mantener el guard `if (portal.hasPortalB())` o hacer que `toMap()` acepte null.
-8. **Atención a `getButtonLocation()` con `facing` null:** Si `facing` es null, el método devuelve null sin advertencia. Considerar loguear un warning en ese caso para facilitar depuración.
-9. Evaluar si es mejor usar dos campos `sideA`/`sideB` tipados o una `List<PortalSide>` con máximo 2. Dos campos es más claro y mantiene compatibilidad natural con el YAML.
-
-### Solución propuesta
-
-- Crear clase `PortalSide` con: `String worldName`, `int x, y, z` (o `Location woolLocation`), `String ownerName`, `transient BlockFace facing`, `boolean disabled`, `long createdAt`, `transient Location cachedLocation`.
-- `PortalSide` implementa `getSignLocation()`, `getButtonLocation()`, `isUsable()`, etc.
-- `PortalSide` implementa `Map<String, Object> toMap()` y un factory estático `PortalSide fromMap(Map<String, Object>)`.
-- `Portal` pasa a tener: `String pairId`, `String name`, `String woolColor`, `PortalSide sideA`, `PortalSide sideB`.
-- Eliminar TODOS los métodos con sufijo A/B en `Portal`.
-- Los métodos de `PortalManager` que reciben `boolean portalB` pasan a recibir `PortalSide`.
-- Actualizar `savePortals`/`loadPortals` para delegar serialización a `PortalSide`.
-- Actualizar `PortalListener` y `WoolPortalsCommand` para usar la nueva API.
+Probado en servidor: creacion, enlace, teletransporte, destruccion por rotura de letrero y lana, reparacion, persistencia en disco, `/wp list`, `/wp reload`, colocacion de boton para activar, y limite de portales — todo funciona igual que antes.
 
 ---
 

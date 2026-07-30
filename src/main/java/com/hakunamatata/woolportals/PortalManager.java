@@ -5,7 +5,6 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.WallSign;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -88,7 +87,7 @@ public class PortalManager {
             }
 
             Portal portal = new Portal(portalName, woolColor);
-            portal.setPortalA(woolBlock.getLocation(), playerName, signFacing);
+            portal.getOrCreateA().init(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, portal);
 
             Bukkit.getScheduler().runTask(plugin, () -> setSignStatus(sign.getBlock(), false));
@@ -100,42 +99,47 @@ public class PortalManager {
             return new CreateResult(CreateStatus.DUPLICATE, null);
         }
 
-        if (!existing.hasPortalB()) {
-            existing.setPortalB(woolBlock.getLocation(), playerName, signFacing);
+        if (!existing.hasSideB()) {
+            existing.getOrCreateB().init(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 setSignStatus(sign.getBlock(), true);
-                updateOtherSign(existing, true);
+                PortalSide sa = existing.getSideA();
+                if (sa != null) updateSignAtWool(sa.getSignLocation(), true);
             });
 
             return new CreateResult(CreateStatus.LINKED, existing);
         }
 
-        if (existing.isDisabledA()) {
-            existing.setDisabledA(false);
-            existing.setPortalA(woolBlock.getLocation(), playerName, signFacing);
+        PortalSide sideA = existing.getSideA();
+        if (sideA != null && sideA.isDisabled()) {
+            sideA.setDisabled(false);
+            sideA.init(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 setSignStatus(sign.getBlock(), true);
-                if (existing.isUsableB()) {
-                    updateOtherSignA(existing, true);
+                PortalSide sb = existing.getSideB();
+                if (sb != null && sb.isUsable()) {
+                    updateSignAtWool(sb.getSignLocation(), true);
                 }
             });
 
             return new CreateResult(CreateStatus.REPAIRED, existing);
         }
 
-        if (existing.isDisabledB()) {
-            existing.setDisabledB(false);
-            existing.setPortalB(woolBlock.getLocation(), playerName, signFacing);
+        PortalSide sideB = existing.getSideB();
+        if (sideB != null && sideB.isDisabled()) {
+            sideB.setDisabled(false);
+            sideB.init(woolBlock.getLocation(), playerName, signFacing);
             portals.put(pairId, existing);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 setSignStatus(sign.getBlock(), true);
-                if (existing.isUsableA()) {
-                    updateOtherSign(existing, true);
+                PortalSide sa = existing.getSideA();
+                if (sa != null && sa.isUsable()) {
+                    updateSignAtWool(sa.getSignLocation(), true);
                 }
             });
 
@@ -154,20 +158,6 @@ public class PortalManager {
         }
     }
 
-    private void updateOtherSign(Portal portal, boolean on) {
-        Location otherLoc = portal.getSignLocationA();
-        if (otherLoc != null) {
-            updateSignAtWool(otherLoc, on);
-        }
-    }
-
-    private void updateOtherSignA(Portal portal, boolean on) {
-        Location otherLoc = portal.getSignLocationB();
-        if (otherLoc != null) {
-            updateSignAtWool(otherLoc, on);
-        }
-    }
-
     public Portal getPortalAtButton(Block buttonBlock) {
         for (Portal portal : portals.values()) {
             if (portal.isButtonForThisPortal(buttonBlock.getLocation())) {
@@ -179,14 +169,19 @@ public class PortalManager {
 
     public boolean teleportPlayer(org.bukkit.entity.Player player, Portal portal, Block clickedButton) {
         if (!portal.isComplete()) {
-            player.sendMessage(ChatColor.RED + "Este portal no está enlazado.");
+            player.sendMessage(ChatColor.RED + "Este portal no esta enlazado.");
             return false;
         }
 
-        boolean isPortalA = isPortalAButton(portal, clickedButton.getLocation());
-        if (!isFrameIntact(portal, isPortalA)) {
-            disablePortal(portal, isPortalA);
-            player.sendMessage(ChatColor.RED + "El marco del portal está dañado. Repáralo y edita el letrero para reactivarlo.");
+        PortalSide departureSide = whichSideForButton(portal, clickedButton.getLocation());
+        if (departureSide == null) {
+            player.sendMessage(ChatColor.RED + "El portal no esta disponible.");
+            return false;
+        }
+
+        if (!isFrameIntact(departureSide)) {
+            disablePortalSide(departureSide, portal);
+            player.sendMessage(ChatColor.RED + "El marco del portal esta danado. Reparalo y edita el letrero para reactivarlo.");
             return false;
         }
 
@@ -201,15 +196,11 @@ public class PortalManager {
             }
         }
 
-        Location target;
-        if (isPortalAButton(portal, clickedButton.getLocation())) {
-            target = portal.getExitLocation(1);
-        } else {
-            target = portal.getExitLocation(0);
-        }
+        PortalSide destinationSide = (departureSide == portal.getSideA()) ? portal.getSideB() : portal.getSideA();
+        Location target = destinationSide != null ? destinationSide.getExitLocation() : null;
 
         if (target == null) {
-            player.sendMessage(ChatColor.RED + "El portal de destino no está disponible.");
+            player.sendMessage(ChatColor.RED + "El portal de destino no esta disponible.");
             return false;
         }
 
@@ -223,9 +214,23 @@ public class PortalManager {
             player.getWorld().playSound(player.getLocation(), config.getTeleportSound(), 0.5f, 1.0f);
         }
 
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "¡Woosh!");
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "Woosh!");
 
         return true;
+    }
+
+    private PortalSide whichSideForButton(Portal portal, Location buttonLoc) {
+        PortalSide sa = portal.getSideA();
+        if (sa != null) {
+            Location btnA = sa.getButtonLocation();
+            if (btnA != null && btnA.equals(buttonLoc)) return sa;
+        }
+        PortalSide sb = portal.getSideB();
+        if (sb != null) {
+            Location btnB = sb.getButtonLocation();
+            if (btnB != null && btnB.equals(buttonLoc)) return sb;
+        }
+        return null;
     }
 
     public Portal removePortalAtSign(Block signBlock, org.bukkit.entity.Player destroyer) {
@@ -236,23 +241,25 @@ public class PortalManager {
 
         Portal found = null;
         String foundKey = null;
-        boolean isPortalA = false;
+        boolean isSideA = false;
 
         for (Map.Entry<String, Portal> entry : portals.entrySet()) {
             Portal p = entry.getValue();
-            Location signA = p.getSignLocationA();
-            Location signB = p.getSignLocationB();
+            PortalSide sa = p.getSideA();
+            PortalSide sb = p.getSideB();
 
-            if (signA != null && signA.equals(woolBlock.getLocation())) {
+            Location locA = sa != null ? sa.getSignLocation() : null;
+            if (locA != null && locA.equals(woolBlock.getLocation())) {
                 found = p;
                 foundKey = entry.getKey();
-                isPortalA = true;
+                isSideA = true;
                 break;
             }
-            if (signB != null && signB.equals(woolBlock.getLocation())) {
+            Location locB = sb != null ? sb.getSignLocation() : null;
+            if (locB != null && locB.equals(woolBlock.getLocation())) {
                 found = p;
                 foundKey = entry.getKey();
-                isPortalA = false;
+                isSideA = false;
                 break;
             }
         }
@@ -260,8 +267,9 @@ public class PortalManager {
         if (found == null) return null;
 
         final Portal portal = found;
-        final boolean isA = isPortalA;
-        final boolean hasOther = isA ? portal.hasPortalB() : portal.hasPortalA();
+        final PortalSide matchedSide = isSideA ? portal.getSideA() : portal.getSideB();
+        final PortalSide otherSide = isSideA ? portal.getSideB() : portal.getSideA();
+        final boolean hasOther = otherSide != null;
 
         if (!hasOther) {
             portals.remove(foundKey);
@@ -269,35 +277,24 @@ public class PortalManager {
             return portal;
         }
 
-        final Location locA = portal.getSignLocationA();
-        final Location locB = portal.getSignLocationB();
+        final Location matchedLoc = matchedSide != null ? matchedSide.getSignLocation() : null;
+        final Location otherLoc = otherSide != null ? otherSide.getSignLocation() : null;
 
-        if (isA) {
-            portal.setDisabledA(true);
-            portal.clearA();
-        } else {
-            portal.setDisabledB(true);
-            portal.clearB();
+        if (matchedSide != null) {
+            matchedSide.setDisabled(true);
+            matchedSide.clear();
         }
 
-        if (!portal.hasPortalA() && !portal.hasPortalB()) {
+        if (!portal.hasSideA() && !portal.hasSideB()) {
             portals.remove(foundKey);
             destroyer.sendMessage(ChatColor.GREEN + "Portal '" + portal.getName() + "' eliminado completamente.");
             return portal;
         }
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (isA) {
-                updateSignAtWool(locA, false);
-            } else {
-                updateSignAtWool(locB, false);
-            }
-            if (locA != null && locB != null) {
-                if (isA && portal.isUsableB()) {
-                    updateSignAtWool(locB, false);
-                } else if (!isA && portal.isUsableA()) {
-                    updateSignAtWool(locA, false);
-                }
+            updateSignAtWool(matchedLoc, false);
+            if (matchedLoc != null && otherLoc != null) {
+                updateSignAtWool(otherLoc, false);
             }
         });
 
@@ -423,16 +420,13 @@ public class PortalManager {
         return mat.name().contains("BUTTON");
     }
 
-    private boolean isPortalAButton(Portal portal, Location buttonLoc) {
-        Location btnA = portal.getButtonLocationA();
-        return btnA != null && btnA.equals(buttonLoc);
-    }
-
     private int countPortalsOwnedBy(String playerName) {
         int count = 0;
         for (Portal portal : portals.values()) {
-            if (playerName.equalsIgnoreCase(portal.getOwnerA())
-                    || playerName.equalsIgnoreCase(portal.getOwnerB())) {
+            PortalSide sa = portal.getSideA();
+            PortalSide sb = portal.getSideB();
+            if ((sa != null && playerName.equalsIgnoreCase(sa.getOwnerName()))
+                    || (sb != null && playerName.equalsIgnoreCase(sb.getOwnerName()))) {
                 count++;
             }
         }
@@ -480,29 +474,17 @@ public class PortalManager {
 
                 Map<String, Object> a = (Map<String, Object>) map.get("portalA");
                 if (a != null) {
-                    World world = Bukkit.getWorld((String) a.get("world"));
-                    if (world != null) {
-                        int x = toInt(a.get("x"));
-                        int y = toInt(a.get("y"));
-                        int z = toInt(a.get("z"));
-                        boolean dis = a.get("disabled") instanceof Boolean b && b;
-                        portal.setPortalA(new Location(world, x, y, z), (String) a.get("owner"),
-                            parseFacing((String) a.get("facing")));
-                        if (dis) portal.setDisabledA(true);
+                    PortalSide sideA = PortalSide.fromMap(a);
+                    if (sideA.getWorldName() != null) {
+                        portal.setSideA(sideA);
                     }
                 }
 
                 Map<String, Object> b = (Map<String, Object>) map.get("portalB");
                 if (b != null) {
-                    World world = Bukkit.getWorld((String) b.get("world"));
-                    if (world != null) {
-                        int x = toInt(b.get("x"));
-                        int y = toInt(b.get("y"));
-                        int z = toInt(b.get("z"));
-                        boolean dis = b.get("disabled") instanceof Boolean bool && bool;
-                        portal.setPortalB(new Location(world, x, y, z), (String) b.get("owner"),
-                            parseFacing((String) b.get("facing")));
-                        if (dis) portal.setDisabledB(true);
+                    PortalSide sideB = PortalSide.fromMap(b);
+                    if (sideB.getWorldName() != null) {
+                        portal.setSideB(sideB);
                     }
                 }
 
@@ -519,21 +501,6 @@ public class PortalManager {
         plugin.getLogger().info("Loaded " + portals.size() + " portal pairs from disk.");
     }
 
-    private int toInt(Object obj) {
-        if (obj instanceof Number) return ((Number) obj).intValue();
-        return 0;
-    }
-
-    private BlockFace parseFacing(String facingStr) {
-        if (facingStr == null) return BlockFace.NORTH;
-        try {
-            return BlockFace.valueOf(facingStr);
-        } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid BlockFace '" + facingStr + "' in portals.yml, defaulting to NORTH.");
-            return BlockFace.NORTH;
-        }
-    }
-
     public void savePortals() {
         FileConfiguration config = new YamlConfiguration();
         List<Map<String, Object>> portalList = new ArrayList<>();
@@ -543,26 +510,14 @@ public class PortalManager {
             map.put("name", portal.getName());
             map.put("color", portal.getWoolColor());
 
-            Map<String, Object> a = new LinkedHashMap<>();
-            a.put("world", portal.getWorldA());
-            a.put("x", portal.getXA());
-            a.put("y", portal.getYA());
-            a.put("z", portal.getZA());
-            a.put("owner", portal.getOwnerA());
-            a.put("disabled", portal.isDisabledA());
-            if (portal.getFacingA() != null) a.put("facing", portal.getFacingA().name());
-            map.put("portalA", a);
+            PortalSide sideA = portal.getSideA();
+            if (sideA != null) {
+                map.put("portalA", sideA.toMap());
+            }
 
-            if (portal.hasPortalB()) {
-                Map<String, Object> b = new LinkedHashMap<>();
-                b.put("world", portal.getWorldB());
-                b.put("x", portal.getXB());
-                b.put("y", portal.getYB());
-                b.put("z", portal.getZB());
-                b.put("owner", portal.getOwnerB());
-                b.put("disabled", portal.isDisabledB());
-                if (portal.getFacingB() != null) b.put("facing", portal.getFacingB().name());
-                map.put("portalB", b);
+            PortalSide sideB = portal.getSideB();
+            if (sideB != null) {
+                map.put("portalB", sideB.toMap());
             }
 
             portalList.add(map);
@@ -599,45 +554,49 @@ public class PortalManager {
         if (!isWool(woolBlock.getType())) return null;
 
         for (Portal portal : portals.values()) {
-            Location locA = portal.getSignLocationA();
-            Location locB = portal.getSignLocationB();
+            PortalSide sa = portal.getSideA();
+            PortalSide sb = portal.getSideB();
+            Location locA = sa != null ? sa.getSignLocation() : null;
+            Location locB = sb != null ? sb.getSignLocation() : null;
             if (locA != null && locA.equals(woolBlock.getLocation())) return portal;
             if (locB != null && locB.equals(woolBlock.getLocation())) return portal;
         }
         return null;
     }
 
-    public boolean isFrameIntact(Portal portal, boolean portalB) {
-        Location woolLoc = portalB ? portal.getSignLocationB() : portal.getSignLocationA();
+    public boolean isFrameIntact(PortalSide side) {
+        if (side == null) return false;
+        Location woolLoc = side.getSignLocation();
         if (woolLoc == null || woolLoc.getWorld() == null) return false;
         if (!isWool(woolLoc.getBlock().getType())) return false;
 
         Material woolType = woolLoc.getBlock().getType();
-        BlockFace facing = portalB ? portal.getFacingB() : portal.getFacingA();
+        BlockFace facing = side.getFacing();
         if (facing == null) facing = BlockFace.NORTH;
 
         return tryDetectFrame(woolLoc.getBlock(), facing, woolType) != null;
     }
 
-    public void disablePortal(Portal portal, boolean portalB) {
-        if (portalB) {
-            portal.setDisabledB(true);
-        } else {
-            portal.setDisabledA(true);
-        }
+    public void disablePortalSide(PortalSide side, Portal portal) {
+        if (side == null) return;
+        side.setDisabled(true);
 
-        Location locA = portal.getSignLocationA();
-        Location locB = portal.getSignLocationB();
+        PortalSide sa = portal.getSideA();
+        PortalSide sb = portal.getSideB();
+
+        Location locA = sa != null ? sa.getSignLocation() : null;
+        Location locB = sb != null ? sb.getSignLocation() : null;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (locA != null) updateSignAtWool(locA, false);
-            if (locB != null) updateSignAtWool(locB, false);
+            updateSignAtWool(locA, false);
+            updateSignAtWool(locB, false);
         });
     }
 
-    public boolean isPlayerInsidePortal(org.bukkit.entity.Player player, Portal portal, boolean sideB) {
-        Location woolLoc = sideB ? portal.getSignLocationB() : portal.getSignLocationA();
-        BlockFace facing = sideB ? portal.getFacingB() : portal.getFacingA();
+    public boolean isPlayerInsidePortal(org.bukkit.entity.Player player, PortalSide side) {
+        if (side == null) return false;
+        Location woolLoc = side.getSignLocation();
+        BlockFace facing = side.getFacing();
         if (woolLoc == null || facing == null) return false;
         if (!player.getWorld().equals(woolLoc.getWorld())) return false;
 
@@ -668,7 +627,7 @@ public class PortalManager {
         return feetY >= wy - 4.0 && feetY <= wy;
     }
 
-    public CreateStatus reassignPortal(Portal portal, boolean portalB, String newName, String playerName) {
+    public CreateStatus reassignPortal(Portal portal, PortalSide mySide, PortalSide orphanSide, String newName, String playerName) {
         String woolColor = portal.getWoolColor();
         String oldPairId = portal.getPairId();
         String newPairId = newName + "_" + woolColor;
@@ -679,12 +638,12 @@ public class PortalManager {
             return CreateStatus.DUPLICATE;
         }
 
-        Location orphanLoc = portalB ? portal.getSignLocationA() : portal.getSignLocationB();
+        Location orphanLoc = orphanSide != null ? orphanSide.getSignLocation() : null;
 
         portals.remove(oldPairId);
 
-        BlockFace facing = portalB ? portal.getFacingB() : portal.getFacingA();
-        Location myLoc = portalB ? portal.getSignLocationB() : portal.getSignLocationA();
+        BlockFace facing = mySide != null ? mySide.getFacing() : null;
+        Location myLoc = mySide != null ? mySide.getSignLocation() : null;
 
         if (orphanLoc != null) {
             final Location orphan = orphanLoc.clone();
@@ -692,17 +651,20 @@ public class PortalManager {
         }
 
         if (targetPair != null) {
-            if (targetPair.hasPortalA() && targetPair.isDisabledA()) {
-                targetPair.setDisabledA(false);
+            PortalSide tsa = targetPair.getSideA();
+            PortalSide tsb = targetPair.getSideB();
+
+            if (tsa != null && tsa.isDisabled()) {
+                tsa.setDisabled(false);
             }
-            if (targetPair.hasPortalB() && targetPair.isDisabledB()) {
-                targetPair.setDisabledB(false);
+            if (tsb != null && tsb.isDisabled()) {
+                tsb.setDisabled(false);
             }
 
-            if (!targetPair.hasPortalA()) {
-                targetPair.setPortalA(myLoc, playerName, facing);
-            } else if (!targetPair.hasPortalB()) {
-                targetPair.setPortalB(myLoc, playerName, facing);
+            if (targetPair.getSideA() == null) {
+                targetPair.getOrCreateA().init(myLoc, playerName, facing);
+            } else if (targetPair.getSideB() == null) {
+                targetPair.getOrCreateB().init(myLoc, playerName, facing);
             }
 
             portals.put(newPairId, targetPair);
@@ -710,26 +672,30 @@ public class PortalManager {
             if (targetPair.isComplete()) {
                 final Portal tp = targetPair;
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    updateOtherSign(tp, true);
-                    updateOtherSignA(tp, true);
+                    PortalSide ta = tp.getSideA();
+                    PortalSide tb = tp.getSideB();
+                    if (ta != null) updateSignAtWool(ta.getSignLocation(), true);
+                    if (tb != null) updateSignAtWool(tb.getSignLocation(), true);
                 });
                 return CreateStatus.LINKED;
             }
 
             Bukkit.getScheduler().runTask(plugin, () -> {
-                Location loc = targetPair.getSignLocationA() != null ? targetPair.getSignLocationA() : targetPair.getSignLocationB();
+                PortalSide ta = targetPair.getSideA();
+                PortalSide tb = targetPair.getSideB();
+                Location loc = ta != null ? ta.getSignLocation() : (tb != null ? tb.getSignLocation() : null);
                 if (loc != null) updateSignAtWool(loc, false);
             });
             return CreateStatus.CREATED;
         }
 
         Portal newPortal = new Portal(newName, woolColor);
-        newPortal.setPortalA(myLoc, playerName, facing);
+        newPortal.getOrCreateA().init(myLoc, playerName, facing);
         portals.put(newPairId, newPortal);
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            Location loc = newPortal.getSignLocationA();
-            if (loc != null) updateSignAtWool(loc, false);
+            PortalSide nsa = newPortal.getSideA();
+            if (nsa != null) updateSignAtWool(nsa.getSignLocation(), false);
         });
         return CreateStatus.CREATED;
     }
